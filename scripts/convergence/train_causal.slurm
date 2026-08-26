@@ -37,6 +37,9 @@ mkdir -p $PYTHONUSERBASE
 pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             pytorch-lightning \
             torchmetrics \
+            pyDeprecate \
+            fsspec \
+            packaging \
             online-conformal \
             efficientnet-pytorch \
             einops \
