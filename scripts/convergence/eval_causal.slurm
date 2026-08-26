@@ -26,9 +26,10 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
-# ─── Install extra pure-python packages offline ───
-pip install --no-index --find-links=$HOME/pip_wheels --no-deps \
+# ─── Install extra packages offline ───
+pip install --no-index --find-links=$HOME/pip_wheels \
             pytorch-lightning \
+            torchmetrics \
             online-conformal \
             efficientnet-pytorch \
             einops \
