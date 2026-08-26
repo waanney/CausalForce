@@ -32,11 +32,11 @@ eval "$(conda shell.bash hook)"
 conda activate CausalForce
 
 # ─── Paths ───
-TEST_DATA="$HOME/data/MCR_Dataset/test/"
+TEST_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/test/"
 CKPT="../log/CausalForce_v1/best_epoch*.ckpt"  # from Stage 2
 
 # ─── Run ───
-cd Conformal_Risk_Tube_Prediction
+cd CausalForce
 
 python inference_causal.py \
     --data_root ${TEST_DATA} \

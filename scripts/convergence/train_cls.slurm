@@ -32,14 +32,14 @@ eval "$(conda shell.bash hook)"
 conda activate CausalForce
 
 # ─── Paths ───
-TRAIN_DATA="$HOME/data/MCR_Dataset/train/"
-VAL_DATA="$HOME/data/MCR_Dataset/val/"
+TRAIN_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/train/"
+VAL_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/"
 
 # ─── Create log directories ───
 mkdir -p log/slurm
 
 # ─── Run ───
-cd Conformal_Risk_Tube_Prediction
+cd CausalForce
 
 python train_cls.py \
     --id risk_category_classifier \

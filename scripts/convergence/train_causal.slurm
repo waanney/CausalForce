@@ -36,8 +36,8 @@ eval "$(conda shell.bash hook)"
 conda activate CausalForce
 
 # ─── Paths ───
-TRAIN_DATA="$HOME/data/MCR_Dataset/train/"
-VAL_DATA="$HOME/data/MCR_Dataset/val/"
+TRAIN_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/train/"
+VAL_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/"
 CLS_CKPT="../log/risk_category_classifier/best_epoch*.ckpt"  # from Stage 1
 
 # ─── Causal Hyperparameters ───
@@ -56,7 +56,7 @@ BATCH_SIZE=4
 mkdir -p log/slurm
 
 # ─── Run ───
-cd Conformal_Risk_Tube_Prediction
+cd CausalForce
 
 python train_causal.py \
     --id ${EXP_ID} \
