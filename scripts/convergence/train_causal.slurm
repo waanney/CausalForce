@@ -18,10 +18,6 @@
 # Stage 2: CausalForce Full Training
 # Cluster: Convergence (LIP6) — Container mode
 # Container: NVIDIA PyTorch 22.08 (PyTorch 1.13 + CUDA 11.7)
-#
-# Loads pre-trained classifier from Stage 1
-# Trains CausalDisentangle + CausalMessagePassing + CausalRiskHead
-# Loss = L_score + L_htsc + L_ortho + L_cf
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -31,16 +27,17 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
-# ─── Install dependencies inside container ───
-pip install pytorch-lightning==1.6.5 \
-            online-conformal==1.0.2 \
-            pandas==1.3.5 \
-            efficientnet-pytorch==0.7.0 \
-            einops==0.4.1 \
-            timm==0.5.4 \
-            torchmetrics==0.11.4 \
-            scikit-image==0.19.3 \
-            opencv-python-headless==4.5.1.48 \
+# ─── Install dependencies offline inside container ───
+pip install --no-index --find-links=$HOME/pip_wheels \
+            pytorch-lightning \
+            online-conformal \
+            pandas \
+            efficientnet-pytorch \
+            einops \
+            timm \
+            torchmetrics \
+            scikit-image \
+            opencv-python-headless \
             --quiet
 
 # ─── Paths ───
