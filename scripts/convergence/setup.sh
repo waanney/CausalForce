@@ -14,8 +14,8 @@ echo "╚═══════════════════════�
 echo ""
 echo ">>> [1/4] Cloning repository..."
 cd ~
-git clone https://github.com/hcis-lab/CRTP.git
-cd CRTP
+git clone https://github.com/waanney/CausalForce.git
+cd CausalForce
 
 # ─── 2. Create conda environment ───
 echo ""
