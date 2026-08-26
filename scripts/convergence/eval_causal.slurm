@@ -34,8 +34,8 @@ mkdir -p $PYTHONUSERBASE
 
 # ─── Install extra packages offline ───
 pip install --no-index --find-links=$HOME/pip_wheels --user \
-            pytorch-lightning==1.6.5 \
-            torchmetrics==0.8.2 \
+            pytorch-lightning==1.7.7 \
+            torchmetrics==0.9.3 \
             online-conformal==1.0.2 \
             efficientnet-pytorch==0.7.0 \
             einops==0.4.1 \
