@@ -43,7 +43,6 @@ class GCN_LSTM_CLS(pl.LightningModule):
             all_objs_id        = all_objs_ids[i][-1]           # list[int] or (num_objs,)
             gt_risk_types =   label_risk_type[i]          # list[int] or (num_objs,)
             
-            num_preds = pred_risk_type.size(0)                    # 通常 = 11 + 1 (phantom)（padding 後固定長度）
             N = len(all_objs_id)
             
             if len(all_objs_id) == 0:
@@ -60,16 +59,18 @@ class GCN_LSTM_CLS(pl.LightningModule):
                         idx = gt_risk_ids.index(obj_id)
                         matched_gt.append(gt_risk_types[idx])            # (8,)
                         
-                preds = torch.stack(matched_pred)                     
-                gts   = torch.stack(matched_gt)  
-                loss_cls_i = F.cross_entropy(preds, gts)
+                if len(matched_pred) == 0:
+                    loss_cls_i = pred_risk_type.sum() * 0.0
+                else:
+                    preds = torch.stack(matched_pred)                     
+                    gts   = torch.stack(matched_gt)  
+                    loss_cls_i = F.cross_entropy(preds, gts)
 
             total_loss += loss_cls_i
 
-  
         total_loss = total_loss / B
 
-        self.log("total_loss", total_loss, prog_bar=True)
+        self.log("total_loss", total_loss, prog_bar=True, sync_dist=True)
 
         return total_loss
 
@@ -89,7 +90,6 @@ class GCN_LSTM_CLS(pl.LightningModule):
         
         val_total_loss = torch.tensor(0.0, device=self.device)
 
-
         B, T, C, H, W = front_imgs.shape
 
         for i in range(B):
@@ -97,7 +97,6 @@ class GCN_LSTM_CLS(pl.LightningModule):
             gt_risk_ids        = label_risk_ids[i]             # list[int]
             all_objs_id        = all_objs_ids[i][-1]           # list[int] or (num_objs,)
             gt_risk_types =   label_risk_type[i] 
-            
             
             if len(all_objs_id) == 0:
                 loss_cls_i = pred_risk_type.sum() * 0.0
@@ -113,16 +112,18 @@ class GCN_LSTM_CLS(pl.LightningModule):
                         idx = gt_risk_ids.index(obj_id)
                         matched_gt.append(gt_risk_types[idx])            # (8,)
                         
-                preds = torch.stack(matched_pred)                     
-                gts   = torch.stack(matched_gt)  
-                loss_cls_i = F.cross_entropy(preds, gts)
+                if len(matched_pred) == 0:
+                    loss_cls_i = pred_risk_type.sum() * 0.0
+                else:
+                    preds = torch.stack(matched_pred)                     
+                    gts   = torch.stack(matched_gt)  
+                    loss_cls_i = F.cross_entropy(preds, gts)
 
             val_total_loss += loss_cls_i
 
-  
         val_total_loss = val_total_loss / B
 
-        self.log("val_total_loss", val_total_loss, prog_bar=True)
+        self.log("val_total_loss", val_total_loss, prog_bar=True, sync_dist=True)
 	
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -163,7 +164,6 @@ if __name__ == "__main__":
                                             accelerator='gpu',
                                             sync_batchnorm=True,
                                             strategy=DDPStrategy(find_unused_parameters=False),
-                                            profiler='simple',
                                             benchmark=True,
                                             log_every_n_steps=1,
                                             callbacks=[checkpoint_callback,],

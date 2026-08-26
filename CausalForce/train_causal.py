@@ -384,7 +384,6 @@ if __name__ == "__main__":
         accelerator='gpu',
         sync_batchnorm=True,
         strategy=DDPStrategy(find_unused_parameters=True),
-        profiler='simple',
         benchmark=True,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
