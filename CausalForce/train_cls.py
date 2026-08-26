@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies import DDPStrategy
 from data import MultipleRisksDataset, custom_collate_fn
 from classifier import GCN_model
 
@@ -154,16 +154,16 @@ if __name__ == "__main__":
 											dirpath=args.logdir, filename="best_{epoch:02d}-{val_total_loss:.3f}")
 	
     checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch}-last"
+
     trainer = pl.Trainer.from_argparse_args(args,
                                             default_root_dir=args.logdir,
                                             gpus = args.gpus,
-                                            accelerator='ddp',
+                                            accelerator='gpu',
                                             sync_batchnorm=True,
-                                            plugins=DDPPlugin(find_unused_parameters=False),
+                                            strategy=DDPStrategy(find_unused_parameters=False),
                                             profiler='simple',
                                             benchmark=True,
                                             log_every_n_steps=1,
-                                            flush_logs_every_n_steps=2,
                                             callbacks=[checkpoint_callback,],
                                             check_val_every_n_epoch = args.val_every,
                                             max_epochs = args.epochs

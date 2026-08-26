@@ -25,9 +25,11 @@ pip download --no-deps online-conformal==1.0.2 -d $HOME/pip_wheels
 pip download --no-deps efficientnet-pytorch==0.7.1 -d $HOME/pip_wheels
 pip download --no-deps einops==0.4.1 -d $HOME/pip_wheels
 
-# 3. Download torchvision ResNet-50 pretrained weights for backbone offline initialization
-echo "Downloading torchvision ResNet-50 weights..."
+# 3. Download torchvision and timm ResNet-50 pretrained weights for offline execution
+echo "Downloading ResNet-50 pretrained weights to torch hub cache..."
 curl -sSL -L "https://download.pytorch.org/models/resnet50-0676744e.pth" -o $HOME/.cache/torch/hub/checkpoints/resnet50-0676744e.pth
+curl -sSL -L "https://download.pytorch.org/models/resnet50-0676ba61.pth" -o $HOME/.cache/torch/hub/checkpoints/resnet50-0676ba61.pth
+curl -sSL -L "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1_0-14fe96d1.pth" -o $HOME/.cache/torch/hub/checkpoints/resnet50_a1_0-14fe96d1.pth
 
 # 4. Sanity check: ensure all files are valid binaries/archives and not HTML error pages
 echo "Verifying downloaded packages in $HOME/pip_wheels:"
