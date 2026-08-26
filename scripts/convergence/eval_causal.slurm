@@ -42,6 +42,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             online-conformal \
             efficientnet-pytorch \
             einops \
+            timm \
             --quiet
 
 # ─── Paths ───

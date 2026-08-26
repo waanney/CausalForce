@@ -14,7 +14,8 @@ echo "Downloading pre-built offline packages..."
 # 1. Download pytorch-lightning 1.7.7 wheel via curl (using -L to follow redirects)
 curl -sSL -L "https://files.pythonhosted.org/packages/00/eb/3b2152f9c3a50d265f3e75529254228ace8a86e9a4397f3004f1e3be7825/pytorch_lightning-1.7.7-py3-none-any.whl" -o $HOME/pip_wheels/pytorch_lightning-1.7.7-py3-none-any.whl
 
-# 2. Download pure-python packages and PyTorch Lightning dependencies via pip --no-deps
+# 2. Download pure-python packages via pip --no-deps
+pip download --no-deps timm==0.6.13 -d $HOME/pip_wheels
 pip download --no-deps torchmetrics==0.9.3 -d $HOME/pip_wheels
 pip download --no-deps pyDeprecate==0.3.2 -d $HOME/pip_wheels
 pip download --no-deps fsspec==2022.5.0 -d $HOME/pip_wheels
