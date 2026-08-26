@@ -65,6 +65,7 @@ python train_cls.py \
     --val_every 1 \
     --batch_size 26 \
     --num_workers 12 \
+    --precision 16 \
     --gpus 1 \
     --logdir ../log
 

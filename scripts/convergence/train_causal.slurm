@@ -79,6 +79,7 @@ python train_causal.py \
     --val_every 3 \
     --batch_size ${BATCH_SIZE} \
     --num_workers ${NUM_WORKERS} \
+    --precision 16 \
     --gpus 1 \
     --logdir ../log \
     --pretrain_ckpt ${CLS_CKPT} \

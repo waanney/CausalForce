@@ -308,6 +308,7 @@ if __name__ == "__main__":
     parser.add_argument('--val_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/val/'), help='Path to val data')
 
     parser.add_argument('--num_workers', type=int, default=12, help='Number of dataloader workers')
+    parser.add_argument('--precision', type=int, default=16, help='Precision: 16 (FP16 AMP) or 32 (FP32)')
 
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
@@ -382,6 +383,7 @@ if __name__ == "__main__":
         default_root_dir=args.logdir,
         gpus=args.gpus,
         accelerator='gpu',
+        precision=args.precision,
         sync_batchnorm=True,
         strategy=DDPStrategy(find_unused_parameters=True),
         benchmark=True,
