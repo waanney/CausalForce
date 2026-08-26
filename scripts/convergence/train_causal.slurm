@@ -6,8 +6,8 @@
 #SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --gpus=a100_7g.80gb:1
 #SBATCH --time=1-00:00:00
 #SBATCH --mail-type=ALL
@@ -17,7 +17,7 @@
 # ═══════════════════════════════════════════════════════
 # Stage 2: CausalForce Full Training
 # Cluster: Convergence (LIP6) — Container mode
-# Container: NVIDIA PyTorch 22.08 (PyTorch 1.13 + CUDA 11.7)
+# High Performance A100 Configuration (Batch Size 12)
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -61,7 +61,8 @@ W_CF=0.5
 ORTHO_RAMP=4
 EPOCHS=15
 LR=0.0001
-BATCH_SIZE=4
+BATCH_SIZE=12
+NUM_WORKERS=12
 
 # ─── Create log directories ───
 mkdir -p $HOME/CausalForce/log/slurm
@@ -77,6 +78,7 @@ python train_causal.py \
     --lr ${LR} \
     --val_every 3 \
     --batch_size ${BATCH_SIZE} \
+    --num_workers ${NUM_WORKERS} \
     --gpus 1 \
     --logdir ../log \
     --pretrain_ckpt ${CLS_CKPT} \

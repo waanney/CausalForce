@@ -138,6 +138,8 @@ if __name__ == "__main__":
     parser.add_argument('--train_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/train/'), help='Path to train data')
     parser.add_argument('--val_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/val/'), help='Path to val data')
 
+    parser.add_argument('--num_workers', type=int, default=12, help='Number of dataloader workers')
+
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
@@ -146,8 +148,8 @@ if __name__ == "__main__":
     val_set = MultipleRisksDataset(data_root=args.val_data)
     print(len(val_set))
 
-    dataloader_train = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=8, collate_fn=custom_collate_fn)
-    dataloader_val = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=8, collate_fn=custom_collate_fn)
+    dataloader_train = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=custom_collate_fn, pin_memory=True)
+    dataloader_val = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=custom_collate_fn, pin_memory=True)
 
     GCN_LSTM_Model = GCN_LSTM_CLS(args.lr)
     checkpoint_callback = ModelCheckpoint(save_weights_only=False, mode="min", monitor="val_total_loss", save_top_k=2, save_last=True,

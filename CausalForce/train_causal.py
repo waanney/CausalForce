@@ -307,6 +307,8 @@ if __name__ == "__main__":
     parser.add_argument('--train_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/train/'), help='Path to train data')
     parser.add_argument('--val_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/val/'), help='Path to val data')
 
+    parser.add_argument('--num_workers', type=int, default=12, help='Number of dataloader workers')
+
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
@@ -317,10 +319,10 @@ if __name__ == "__main__":
 
     dataloader_train = DataLoader(
         train_set, batch_size=args.batch_size, shuffle=True,
-        num_workers=8, collate_fn=custom_collate_fn)
+        num_workers=args.num_workers, collate_fn=custom_collate_fn, pin_memory=True)
     dataloader_val = DataLoader(
         val_set, batch_size=args.batch_size, shuffle=False,
-        num_workers=8, collate_fn=custom_collate_fn)
+        num_workers=args.num_workers, collate_fn=custom_collate_fn, pin_memory=True)
 
     causal_model = CausalForce(
         lr=args.lr,

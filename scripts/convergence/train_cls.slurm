@@ -6,8 +6,8 @@
 #SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --gpus=a100_7g.80gb:1
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=ALL
@@ -17,7 +17,7 @@
 # ═══════════════════════════════════════════════════════
 # Stage 1: Risk Category Classifier Pre-training
 # Cluster: Convergence (LIP6) — Container mode
-# Container: NVIDIA PyTorch 22.08 (PyTorch 1.13 + CUDA 11.7)
+# High Performance A100 Configuration (Batch Size 16)
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -63,7 +63,8 @@ python train_cls.py \
     --epochs 10 \
     --lr 0.0001 \
     --val_every 1 \
-    --batch_size 6 \
+    --batch_size 16 \
+    --num_workers 12 \
     --gpus 1 \
     --logdir ../log
 
