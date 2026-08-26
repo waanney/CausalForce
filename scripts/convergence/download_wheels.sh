@@ -1,10 +1,11 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# Download pre-built offline wheels for container execution
+# Download pre-built offline wheels and pretrained weights for container execution
 # Run this on the FRONTEND node (front.convergence.lip6.fr)
 # ═══════════════════════════════════════════════════════════════
 
 mkdir -p $HOME/pip_wheels
+mkdir -p $HOME/.cache/torch/hub/checkpoints
 
 # Clean up broken/partial wheels
 rm -rf $HOME/pip_wheels/*
@@ -24,7 +25,11 @@ pip download --no-deps online-conformal==1.0.2 -d $HOME/pip_wheels
 pip download --no-deps efficientnet-pytorch==0.7.1 -d $HOME/pip_wheels
 pip download --no-deps einops==0.4.1 -d $HOME/pip_wheels
 
-# 3. Sanity check: ensure all files are valid binaries/archives and not HTML error pages
+# 3. Download torchvision ResNet-50 pretrained weights for backbone offline initialization
+echo "Downloading torchvision ResNet-50 weights..."
+curl -sSL -L "https://download.pytorch.org/models/resnet50-0676744e.pth" -o $HOME/.cache/torch/hub/checkpoints/resnet50-0676744e.pth
+
+# 4. Sanity check: ensure all files are valid binaries/archives and not HTML error pages
 echo "Verifying downloaded packages in $HOME/pip_wheels:"
 for f in $HOME/pip_wheels/*; do
     if head -n 1 "$f" 2>/dev/null | grep -q -E "^<|^<!DOCTYPE"; then
@@ -35,4 +40,4 @@ for f in $HOME/pip_wheels/*; do
     fi
 done
 
-echo "✅ All offline packages downloaded and verified successfully in $HOME/pip_wheels"
+echo "✅ All offline packages and pretrained weights downloaded and verified successfully!"

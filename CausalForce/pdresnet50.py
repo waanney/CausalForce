@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
@@ -224,33 +225,37 @@ def pdresnet50(pretrained=False, **kwargs):
 
     model = PDResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
 
-    # pretrained = False
     if pretrained:
-        state_dict_pdresnet50 = torch.load(
-            model_urls['pdresnet50'])['state_dict']
+        ckpt_path = model_urls['pdresnet50']
+        keys_source = None
+        if os.path.exists(ckpt_path):
+            state_dict_pdresnet50 = torch.load(ckpt_path, map_location='cpu').get('state_dict', {})
+            keys_source = [k[7:] for k in state_dict_pdresnet50.keys()]
+
         state_dict_resnet50 = model_zoo.load_url(_model_urls['resnet50'])
         state_dict_new = {}
 
-        for key in state_dict_pdresnet50.keys():
+        if keys_source:
+            for new_key in keys_source:
+                if new_key in state_dict_resnet50.keys():
+                    state_dict_new[new_key] = state_dict_resnet50[new_key].clone()
+                if 'downsample.0' in new_key:
+                    old_key = new_key.replace('downsample.0', 'conv4')
+                    state_dict_new[old_key] = state_dict_resnet50[new_key].clone()
+                elif 'downsample.1' in new_key:
+                    old_key = new_key.replace('downsample.1', 'bn4')
+                    state_dict_new[old_key] = state_dict_resnet50[new_key].clone()
+        else:
+            for key, val in state_dict_resnet50.items():
+                state_dict_new[key] = val.clone()
+                if 'downsample.0' in key:
+                    old_key = key.replace('downsample.0', 'conv4')
+                    state_dict_new[old_key] = val.clone()
+                elif 'downsample.1' in key:
+                    old_key = key.replace('downsample.1', 'bn4')
+                    state_dict_new[old_key] = val.clone()
 
-            new_key = key[7:]
-
-            if new_key in state_dict_resnet50.keys():
-                state_dict_new[new_key] = state_dict_resnet50[new_key].clone()
-
-            if 'downsample.0' in new_key:
-                old_key = new_key
-                old_key = old_key.replace('downsample.0', 'conv4')
-                state_dict_new[old_key] = state_dict_new[new_key].clone()
-                del state_dict_new[new_key]
-
-            elif 'downsample.1' in new_key:
-                old_key = new_key
-                old_key = old_key.replace('downsample.1', 'bn4')
-                state_dict_new[old_key] = state_dict_new[new_key].clone()
-                del state_dict_new[new_key]
-
-        model.load_state_dict(state_dict_new)
+        model.load_state_dict(state_dict_new, strict=False)
 
         for t in model.parameters():
             t.requires_grad = False
@@ -261,9 +266,6 @@ def pdresnet50(pretrained=False, **kwargs):
             t.requires_grad = True
         for t in model.layer4[2].parameters():
             t.requires_grad = True
-
-        # for name, param in model.named_parameters():
-        #     print(name, param.requires_grad)
 
     return model
 
