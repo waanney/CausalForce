@@ -17,7 +17,7 @@
 # ═══════════════════════════════════════════════════════
 # Stage 1: Risk Category Classifier Pre-training
 # Cluster: Convergence (LIP6) — Container mode
-# High Performance A100 Configuration (Batch Size 16)
+# Maximum Performance A100 Configuration (Batch Size 26)
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -63,7 +63,7 @@ python train_cls.py \
     --epochs 10 \
     --lr 0.0001 \
     --val_every 1 \
-    --batch_size 16 \
+    --batch_size 26 \
     --num_workers 12 \
     --gpus 1 \
     --logdir ../log

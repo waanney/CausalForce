@@ -17,7 +17,7 @@
 # ═══════════════════════════════════════════════════════
 # Stage 2: CausalForce Full Training
 # Cluster: Convergence (LIP6) — Container mode
-# High Performance A100 Configuration (Batch Size 12)
+# Maximum Performance A100 Configuration (Batch Size 18)
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -61,7 +61,7 @@ W_CF=0.5
 ORTHO_RAMP=4
 EPOCHS=15
 LR=0.0001
-BATCH_SIZE=12
+BATCH_SIZE=18
 NUM_WORKERS=12
 
 # ─── Create log directories ───
