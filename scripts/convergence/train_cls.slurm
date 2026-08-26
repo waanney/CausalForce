@@ -27,13 +27,19 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
+# ─── Environment Isolation ───
+export PYTHONUSERBASE=$HOME/.container_packages
+export PATH=$PYTHONUSERBASE/bin:$PATH
+export PYTHONPATH=$PYTHONUSERBASE/lib/python3.8/site-packages:$PYTHONPATH
+mkdir -p $PYTHONUSERBASE
+
 # ─── Install extra packages offline ───
-pip install --no-index --find-links=$HOME/pip_wheels \
-            pytorch-lightning \
-            torchmetrics \
-            online-conformal \
-            efficientnet-pytorch \
-            einops \
+pip install --no-index --find-links=$HOME/pip_wheels --user \
+            pytorch-lightning==1.6.5 \
+            torchmetrics==0.8.2 \
+            online-conformal==1.0.2 \
+            efficientnet-pytorch==0.7.0 \
+            einops==0.4.1 \
             --quiet
 
 # ─── Paths ───
