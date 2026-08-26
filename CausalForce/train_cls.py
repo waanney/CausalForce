@@ -135,12 +135,15 @@ if __name__ == "__main__":
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
 
+    parser.add_argument('--train_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/train/'), help='Path to train data')
+    parser.add_argument('--val_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/val/'), help='Path to val data')
+
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
-    train_set = MultipleRisksDataset(data_root='/path/to/your/training_data/')
+    train_set = MultipleRisksDataset(data_root=args.train_data)
     print(len(train_set))
-    val_set = MultipleRisksDataset(data_root='/path/to/your/validation_data/')
+    val_set = MultipleRisksDataset(data_root=args.val_data)
     print(len(val_set))
 
     dataloader_train = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=8, collate_fn=custom_collate_fn)

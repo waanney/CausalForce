@@ -71,6 +71,8 @@ cd $HOME/CausalForce/CausalForce
 
 python train_causal.py \
     --id ${EXP_ID} \
+    --train_data ${TRAIN_DATA} \
+    --val_data ${VAL_DATA} \
     --epochs ${EPOCHS} \
     --lr ${LR} \
     --val_every 3 \

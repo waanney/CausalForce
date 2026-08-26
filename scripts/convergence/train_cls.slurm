@@ -58,6 +58,8 @@ cd $HOME/CausalForce/CausalForce
 
 python train_cls.py \
     --id risk_category_classifier \
+    --train_data ${TRAIN_DATA} \
+    --val_data ${VAL_DATA} \
     --epochs 10 \
     --lr 0.0001 \
     --val_every 1 \
