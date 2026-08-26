@@ -26,17 +26,12 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
-# ─── Install dependencies offline inside container ───
-pip install --no-index --find-links=$HOME/pip_wheels \
+# ─── Install extra pure-python packages offline ───
+pip install --no-index --find-links=$HOME/pip_wheels --no-deps \
             pytorch-lightning \
             online-conformal \
-            pandas \
             efficientnet-pytorch \
             einops \
-            timm \
-            torchmetrics \
-            scikit-image \
-            opencv-python-headless \
             --quiet
 
 # ─── Paths ───
