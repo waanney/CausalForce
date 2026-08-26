@@ -11,10 +11,12 @@
 #SBATCH --gpus=a100_7g.80gb:1
 #SBATCH --time=02:00:00
 #SBATCH --mail-type=ALL
+#SBATCH --container-image nvcr.io\#nvidia/pytorch:22.08-py3
+#SBATCH --container-mount-home
 
 # ═══════════════════════════════════════════════════════
 # Evaluation: CausalForce Inference
-# Cluster: Convergence (LIP6, Sorbonne Université)
+# Cluster: Convergence (LIP6) — Container mode
 # Metrics: Coverage, Tube Volume, TC, BA, Risk-IOU
 # ═══════════════════════════════════════════════════════
 
@@ -25,18 +27,24 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
-# ─── Environment ───
-module purge
-module load python/anaconda3
-eval "$(conda shell.bash hook)"
-conda activate CausalForce
+# ─── Install dependencies inside container ───
+pip install pytorch-lightning==1.6.5 \
+            online-conformal==1.0.2 \
+            pandas==1.3.5 \
+            efficientnet-pytorch==0.7.0 \
+            einops==0.4.1 \
+            timm==0.5.4 \
+            torchmetrics==0.11.4 \
+            scikit-image==0.19.3 \
+            opencv-python-headless==4.5.1.48 \
+            --quiet
 
 # ─── Paths ───
 TEST_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/test/"
-CKPT="../log/CausalForce_v1/best_epoch*.ckpt"  # from Stage 2
+CKPT="$HOME/CausalForce/log/CausalForce_v1/best_epoch*.ckpt"
 
 # ─── Run ───
-cd CausalForce
+cd $HOME/CausalForce/CausalForce
 
 python inference_causal.py \
     --data_root ${TEST_DATA} \

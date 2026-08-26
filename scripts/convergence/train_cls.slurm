@@ -11,11 +11,13 @@
 #SBATCH --gpus=a100_7g.80gb:1
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=ALL
+#SBATCH --container-image nvcr.io\#nvidia/pytorch:22.08-py3
+#SBATCH --container-mount-home
 
 # ═══════════════════════════════════════════════════════
 # Stage 1: Risk Category Classifier Pre-training
-# Cluster: Convergence (LIP6, Sorbonne Université)
-# GPU: NVIDIA A100 80GB
+# Cluster: Convergence (LIP6) — Container mode
+# Container: NVIDIA PyTorch 22.08 (PyTorch 1.13 + CUDA 11.7)
 # ═══════════════════════════════════════════════════════
 
 echo "============================================"
@@ -25,21 +27,27 @@ echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader | head -
 echo "Start time:   $(date)"
 echo "============================================"
 
-# ─── Environment ───
-module purge
-module load python/anaconda3
-eval "$(conda shell.bash hook)"
-conda activate CausalForce
+# ─── Install dependencies inside container ───
+pip install pytorch-lightning==1.6.5 \
+            online-conformal==1.0.2 \
+            pandas==1.3.5 \
+            efficientnet-pytorch==0.7.0 \
+            einops==0.4.1 \
+            timm==0.5.4 \
+            torchmetrics==0.11.4 \
+            scikit-image==0.19.3 \
+            opencv-python-headless==4.5.1.48 \
+            --quiet
 
 # ─── Paths ───
 TRAIN_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/train/"
 VAL_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/"
 
 # ─── Create log directories ───
-mkdir -p log/slurm
+mkdir -p $HOME/CausalForce/log/slurm
 
 # ─── Run ───
-cd CausalForce
+cd $HOME/CausalForce/CausalForce
 
 python train_cls.py \
     --id risk_category_classifier \
