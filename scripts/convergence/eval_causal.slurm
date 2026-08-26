@@ -33,12 +33,11 @@ export PYTHONPATH=$PYTHONUSERBASE/lib/python3.8/site-packages:$PYTHONPATH
 mkdir -p $PYTHONUSERBASE
 
 # ─── Install extra packages offline ───
-pip install --no-index --find-links=$HOME/pip_wheels --user \
-            pytorch-lightning==1.7.7 \
-            torchmetrics==0.9.3 \
-            online-conformal==1.0.2 \
-            efficientnet-pytorch==0.7.0 \
-            einops==0.4.1 \
+pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
+            pytorch-lightning \
+            online-conformal \
+            efficientnet-pytorch \
+            einops \
             --quiet
 
 # ─── Paths ───
