@@ -149,10 +149,10 @@ class CausalRiskHead(nn.Module):
         # TIE path: mediated through risk type
         self.type_head = nn.Linear(feat_dim, num_risk_types)
         self.indirect_head = nn.Linear(num_risk_types, num_bins)
-        # Learned fusion of direct + indirect
-        self.fusion = nn.Sequential(
+        # Learned per-horizon gate for combining direct and indirect logits.
+        self.fusion_gate = nn.Sequential(
             nn.Linear(num_bins * 2, num_bins),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x, return_components=False):
@@ -168,7 +168,8 @@ class CausalRiskHead(nn.Module):
         risk_type = self.type_head(x)                              # mediator
         indirect = self.indirect_head(F.softmax(risk_type, -1))    # TIE
 
-        total = self.fusion(torch.cat([direct, indirect], dim=-1))
+        gate = self.fusion_gate(torch.cat([direct, indirect], dim=-1))
+        total = torch.sigmoid(gate * direct + (1.0 - gate) * indirect)
 
         if return_components:
             return total, risk_type, direct, indirect
@@ -179,7 +180,7 @@ class CausalRiskHead(nn.Module):
 # Loss Functions
 # ──────────────────────────────────────────────────────────────
 
-def orthogonality_loss(causal_feat, scene_feat):
+def orthogonality_loss(causal_feat, scene_feat, valid_mask=None):
     """Ensure causal and scene features are statistically independent.
 
     Minimizes squared cosine similarity between the two feature sets
@@ -187,7 +188,13 @@ def orthogonality_loss(causal_feat, scene_feat):
     """
     c = F.normalize(causal_feat, dim=-1)
     s = F.normalize(scene_feat, dim=-1)
-    return (c * s).sum(dim=-1).pow(2).mean()
+    per_object = (c * s).sum(dim=-1).pow(2)
+    if valid_mask is None:
+        return per_object.mean()
+    valid_mask = valid_mask.to(device=per_object.device, dtype=torch.bool)
+    if valid_mask.any():
+        return per_object[valid_mask].mean()
+    return per_object.sum() * 0.0
 
 
 def counterfactual_loss(direct, indirect, gt_risk_score):
