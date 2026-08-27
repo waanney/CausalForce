@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 from online_conformal.saocp import SAOCP
 from train import compute_nonconformity, htsc_loss
 from causal_modules import orthogonality_loss, counterfactual_loss
+from checkpoint_utils import load_partial_checkpoint
 
 
 class CausalForce(pl.LightningModule):
@@ -355,26 +356,40 @@ if __name__ == "__main__":
     )
 
     # ── Load pre-trained classifier weights ──
-    checkpoint = torch.load(args.pretrain_ckpt)
-    state_dict = checkpoint["state_dict"]
+    def transfer_stage1_key(key):
+        if 'risk_type_head.' in key:
+            new_key = key.replace(
+                'risk_type_head.', 'causal_risk_head.type_head.')
+            print(f"Transferred: {key} -> {new_key}", flush=True)
+            return new_key
+        return key
 
-    # Transfer risk_type_head → causal_risk_head.type_head
-    adapted_state_dict = {}
-    for key, value in state_dict.items():
-        if 'risk_type_head.weight' in key:
-            new_key = key.replace('risk_type_head.weight',
-                                  'causal_risk_head.type_head.weight')
-            adapted_state_dict[new_key] = value
-            print(f"Transferred: {key} → {new_key}")
-        elif 'risk_type_head.bias' in key:
-            new_key = key.replace('risk_type_head.bias',
-                                  'causal_risk_head.type_head.bias')
-            adapted_state_dict[new_key] = value
-            print(f"Transferred: {key} → {new_key}")
-        else:
-            adapted_state_dict[key] = value
-
-    causal_model.load_state_dict(adapted_state_dict, strict=False)
+    load_partial_checkpoint(
+        causal_model,
+        args.pretrain_ckpt,
+        key_transform=transfer_stage1_key,
+        allowed_missing_prefixes=(
+            'model.causal_disentangle.',
+            'model.causal_message_passing.',
+            'model.causal_risk_head.direct_head.',
+            'model.causal_risk_head.indirect_head.',
+            'model.causal_risk_head.fusion.',
+            'model.causal_risk_head.fusion_gate.',
+        ),
+        allowed_unexpected_prefixes=(
+            'model.fc_emb_1.',
+            'model.fc_emb_2.',
+        ),
+        required_loaded_prefixes=(
+            'model.backbone.',
+            'model.object_backbone.',
+            'model.camera_features.',
+            'model.lstm.',
+            'model.out_layer.',
+            'model.causal_risk_head.type_head.',
+        ),
+        map_location='cpu',
+    )
 
     # Freeze the risk type head (same as original)
     for name, param in causal_model.named_parameters():
@@ -387,6 +402,15 @@ if __name__ == "__main__":
         else:
             param.requires_grad = True
             print(f"Trainable: {name}")
+
+    frozen_count = sum(
+        parameter.numel() for parameter in causal_model.parameters()
+        if not parameter.requires_grad)
+    trainable_count = sum(
+        parameter.numel() for parameter in causal_model.parameters()
+        if parameter.requires_grad)
+    print(f"Frozen parameter count: {frozen_count}", flush=True)
+    print(f"Trainable parameter count: {trainable_count}", flush=True)
 
     causal_model.cuda()
 

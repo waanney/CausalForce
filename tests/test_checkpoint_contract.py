@@ -8,7 +8,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "CausalForce"))
 
-from checkpoint_utils import load_model_checkpoint
+from checkpoint_utils import load_model_checkpoint, load_partial_checkpoint
 
 
 class StageTwoToyModel(torch.nn.Module):
@@ -64,3 +64,74 @@ def test_loads_complete_stage2_checkpoint(tmp_path):
     assert "saocp_class" in checkpoint
     for key, expected in source.state_dict().items():
         torch.testing.assert_close(target.state_dict()[key], expected)
+
+
+class StageOneWrapper(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = torch.nn.Module()
+        self.model.backbone = torch.nn.Linear(2, 2)
+        self.model.risk_type_head = torch.nn.Linear(2, 4)
+        self.model.fc_emb_1 = torch.nn.Linear(2, 2)
+
+
+class StageTwoWrapper(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = torch.nn.Module()
+        self.model.backbone = torch.nn.Linear(2, 2)
+        self.model.causal_risk_head = torch.nn.Module()
+        self.model.causal_risk_head.type_head = torch.nn.Linear(2, 4)
+        self.model.causal_risk_head.direct_head = torch.nn.Linear(2, 8)
+
+
+def test_stage1_to_stage2_transfer_has_explicit_contract(tmp_path):
+    source = StageOneWrapper()
+    path = tmp_path / "stage1.ckpt"
+    torch.save({"state_dict": source.state_dict()}, path)
+    target = StageTwoWrapper()
+
+    _, report = load_partial_checkpoint(
+        target,
+        str(path),
+        key_transform=lambda key: key.replace(
+            "risk_type_head.", "causal_risk_head.type_head."),
+        allowed_missing_prefixes=("model.causal_risk_head.direct_head.",),
+        allowed_unexpected_prefixes=("model.fc_emb_1.",),
+        required_loaded_prefixes=(
+            "model.backbone.",
+            "model.causal_risk_head.type_head.",
+        ),
+    )
+
+    assert report["missing"] == [
+        "model.causal_risk_head.direct_head.weight",
+        "model.causal_risk_head.direct_head.bias",
+    ]
+    torch.testing.assert_close(
+        target.model.backbone.weight, source.model.backbone.weight)
+    torch.testing.assert_close(
+        target.model.causal_risk_head.type_head.weight,
+        source.model.risk_type_head.weight,
+    )
+
+
+def test_stage1_transfer_rejects_missing_backbone(tmp_path):
+    source = StageOneWrapper()
+    state = {
+        key: value for key, value in source.state_dict().items()
+        if not key.startswith("model.backbone.")
+    }
+    path = tmp_path / "broken.ckpt"
+    torch.save({"state_dict": state}, path)
+
+    with pytest.raises(RuntimeError, match="backbone"):
+        load_partial_checkpoint(
+            StageTwoWrapper(),
+            str(path),
+            key_transform=lambda key: key.replace(
+                "risk_type_head.", "causal_risk_head.type_head."),
+            allowed_missing_prefixes=("model.causal_risk_head.direct_head.",),
+            allowed_unexpected_prefixes=("model.fc_emb_1.",),
+            required_loaded_prefixes=("model.backbone.",),
+        )

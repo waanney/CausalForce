@@ -1,7 +1,7 @@
 """Checkpoint loading helpers with explicit model-contract validation."""
 
 from collections import OrderedDict
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import torch
 
@@ -69,3 +69,69 @@ def load_model_checkpoint(
             f"Unexpected keys:\n{_format_keys(unexpected)}"
         )
     return checkpoint
+
+
+def load_partial_checkpoint(
+    model,
+    checkpoint_path: str,
+    *,
+    key_transform: Callable[[str], str] = lambda key: key,
+    allowed_missing_prefixes=(),
+    allowed_unexpected_prefixes=(),
+    required_loaded_prefixes=(),
+    map_location="cpu",
+):
+    """Load an explicitly specified partial checkpoint contract.
+
+    This is intended for Stage 1 -> Stage 2 transfer, where new causal
+    modules are expected to be missing but shared representation weights are
+    not. Any mismatch outside the allow-list is a correctness error.
+    """
+    checkpoint = torch.load(checkpoint_path, map_location=map_location)
+    if not isinstance(checkpoint, Mapping):
+        raise TypeError(f"Invalid checkpoint object in {checkpoint_path}")
+    source = checkpoint.get("state_dict", checkpoint)
+    if not isinstance(source, Mapping):
+        raise TypeError("Checkpoint does not contain a mapping state_dict")
+
+    adapted = OrderedDict()
+    for old_key, value in source.items():
+        new_key = key_transform(old_key)
+        if new_key in adapted:
+            raise ValueError(f"Checkpoint key collision after transfer: {new_key}")
+        adapted[new_key] = value
+
+    incompatible = model.load_state_dict(adapted, strict=False)
+    missing = list(incompatible.missing_keys)
+    unexpected = list(incompatible.unexpected_keys)
+    disallowed_missing = [
+        key for key in missing
+        if not key.startswith(tuple(allowed_missing_prefixes))
+    ]
+    disallowed_unexpected = [
+        key for key in unexpected
+        if not key.startswith(tuple(allowed_unexpected_prefixes))
+    ]
+    loaded = set(model.state_dict()).intersection(adapted).difference(missing)
+    absent_required = []
+    for prefix in required_loaded_prefixes:
+        target_keys = [key for key in model.state_dict() if key.startswith(prefix)]
+        if not target_keys or any(key not in loaded for key in target_keys):
+            absent_required.append(prefix)
+
+    print(f"Loaded parameters: {len(loaded)}", flush=True)
+    print(f"Missing keys:\n{_format_keys(missing)}", flush=True)
+    print(f"Unexpected keys:\n{_format_keys(unexpected)}", flush=True)
+    if disallowed_missing or disallowed_unexpected or absent_required:
+        raise RuntimeError(
+            "Stage 1 -> Stage 2 checkpoint contract mismatch.\n"
+            f"Disallowed missing keys:\n{_format_keys(disallowed_missing)}\n"
+            f"Disallowed unexpected keys:\n{_format_keys(disallowed_unexpected)}\n"
+            f"Required loaded prefixes not satisfied:\n"
+            f"{_format_keys(absent_required)}"
+        )
+    return checkpoint, {
+        "loaded": sorted(loaded),
+        "missing": missing,
+        "unexpected": unexpected,
+    }
