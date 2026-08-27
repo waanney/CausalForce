@@ -15,6 +15,7 @@ from data import MultipleRisksDataset, custom_collate_fn
 from causal_model import CausalGCN_model
 from inference import pic_star
 import numpy as np
+from checkpoint_utils import load_model_checkpoint
 
 
 class CausalInferenceModule(pl.LightningModule):
@@ -161,14 +162,8 @@ if __name__ == "__main__":
 
     model = CausalGCN_model()
 
-    checkpoint = torch.load(args.checkpoint)
-    state_dict = checkpoint["state_dict"]
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        new_key = key.replace("model.", "") if key.startswith("model.") else key
-        new_state_dict[new_key] = value
-
-    model.load_state_dict(new_state_dict)
+    checkpoint = load_model_checkpoint(
+        model, args.checkpoint, map_location="cpu", require_conformal=True)
     model.cuda()
     model.eval()
 

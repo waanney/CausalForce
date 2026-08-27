@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from data import MultipleRisksDataset, custom_collate_fn
 from model import GCN_model
+from checkpoint_utils import load_model_checkpoint
 import numpy as np
 
 def pic_star(pred, gt, tau=2, mode="detect"):
@@ -49,15 +50,12 @@ def run_evaluation(args):
 
     model = GCN_model()
 
-    checkpoint = torch.load(args.checkpoint, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
-    
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        new_key = key.replace("model.", "") if key.startswith("model.") else key
-        new_state_dict[new_key] = value
-
-    model.load_state_dict(new_state_dict, strict=False)
+    checkpoint = load_model_checkpoint(
+        model,
+        args.checkpoint,
+        map_location='cuda' if torch.cuda.is_available() else 'cpu',
+        require_conformal=True,
+    )
     model.cuda()
     model.eval()
 

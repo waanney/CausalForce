@@ -57,16 +57,23 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             --quiet
 
 # ─── Paths ───
-VAL_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/"
-CKPT="$HOME/CausalForce/log/risk_category_classifier/epoch=9-last.ckpt"
+VAL_DATA="${VAL_DATA:-$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/}"
+# This must be a calibrated Stage-2 checkpoint. A Stage-1 classifier has no
+# trained risk-score head and therefore cannot produce Risk Tube metrics.
+CKPT="${CAUSAL_CKPT:-$HOME/CausalForce/log/CausalForce_v1/epoch=14-last.ckpt}"
+
+if [[ ! -f "${CKPT}" ]]; then
+    echo "ERROR: Stage-2 checkpoint not found: ${CKPT}" >&2
+    echo "Set CAUSAL_CKPT=/absolute/path/to/stage2.ckpt" >&2
+    exit 2
+fi
 
 # ─── Run ───
 cd $HOME/CausalForce/CausalForce
 
-python inference.py \
+python inference_causal.py \
     --data_root ${VAL_DATA} \
     --batch_size 16 \
-    --num_workers 8 \
     --gpus 1 \
     --checkpoint ${CKPT}
 
