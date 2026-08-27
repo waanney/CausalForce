@@ -67,7 +67,7 @@ class GCN_model(nn.Module):
         
 
     
-    def message_passing(self, input_feature, trackers, device=0):
+    def message_passing(self, input_feature, trackers):
         #############################################
         # input_feature:    (B(1+N))xH
         # trackers:         BxTxNx4
@@ -76,9 +76,9 @@ class GCN_model(nn.Module):
         num_box = trackers.shape[2]+1
         B = len(trackers)
 
-        mask = torch.ones((B, num_box))
-        mask[:, 1:] = trackers[:, -1, :, 2]+trackers[:, -1, :, 3]
-        mask = mask != 0  # (B, N, 1)
+        device = input_feature.device
+        mask = torch.ones((B, num_box), dtype=torch.bool, device=device)
+        mask[:, 1:] = trackers[:, -1].abs().sum(dim=-1) != 0
 
         # (B(1+N))xH -> (B(1+N))xself.emb_size
         emb_feature = self.fc_emb_1(input_feature)
@@ -96,8 +96,7 @@ class GCN_model(nn.Module):
 
         # Bx(1+N)x1
         emb_feature = self.fc_emb_2(emb_feature).reshape(-1, num_box, 1)
-        emb_feature[~(mask.byte().to(torch.bool))] = torch.tensor(
-            [-float("Inf")]).to(device)
+        emb_feature = emb_feature.masked_fill(~mask.unsqueeze(-1), -float("inf"))
 
         # Bx(1+N)x1
         attn_weights = F.softmax(emb_feature, dim=1)
@@ -122,29 +121,41 @@ class GCN_model(nn.Module):
 
         return hx, cx
 
-    def forward(self, camera_inputs, trackers, mask=None, device='cuda'):
+    def forward(self, camera_inputs, trackers, mask=None, device=None):
 
         ###########################################
         #  camera_input     :   BxTxCxWxH
         #  tracker          :   BxTxNx4
         ###########################################
 
+        if camera_inputs.ndim != 5:
+            raise ValueError(
+                f"camera_inputs must be [B,T,C,H,W], got {camera_inputs.shape}")
+        device = camera_inputs.device
         # Record input size
         batch_size = camera_inputs.shape[0]
         t = camera_inputs.shape[1]
         c = camera_inputs.shape[2]
         h = camera_inputs.shape[3]
         w = camera_inputs.shape[4]
+        if t != self.time_steps:
+            raise ValueError(f"Expected T={self.time_steps}, got T={t}")
+        if len(trackers) != batch_size or any(
+                len(sample) != t for sample in trackers):
+            raise ValueError(
+                "trackers must be a B-length list of T-length frame lists")
 
         # Define mask if mask does not exists
-        if mask == None:
-            mask = torch.ones((batch_size, t, c, h, w)).to(device)
+        if mask is None:
+            mask = torch.ones_like(camera_inputs)
+        else:
+            mask = mask.to(device=device, dtype=camera_inputs.dtype)
 
         # initialize LSTM
-        hx = torch.zeros(
-            (batch_size*(1+self.num_box), self.hidden_size)).to(device)
-        cx = torch.zeros(
-            (batch_size*(1+self.num_box), self.hidden_size)).to(device)
+        hx = camera_inputs.new_zeros(
+            (batch_size*(1+self.num_box), self.hidden_size))
+        cx = camera_inputs.new_zeros(
+            (batch_size*(1+self.num_box), self.hidden_size))
 
         """ ego feature"""
         # BxTxCxHxW -> (BT)xCxHxW
@@ -203,15 +214,13 @@ class GCN_model(nn.Module):
             hx_seq.append(hx_step[:, 1:, :])  # B×N×H, only store object features, no ego
             
         hx_seq = torch.stack(hx_seq, dim=1)
-        updated_feature, _ = self.message_passing(hx, padded_trackers, device) # B N 512
+        updated_feature, _ = self.message_passing(hx, padded_trackers) # B N 512
         
         x = self.out_layer(self.drop(updated_feature))
              
-        mask = torch.ones((batch_size, self.num_box))
-        # we only predict the existing boxes in t=last frame
-        mask[:, :] = padded_trackers[:, -1, :, 2] + padded_trackers[:, -1, :, 3] 
-        mask = mask != 0
-        mask = mask.unsqueeze(-1).float().to(device)
+        # We only predict boxes that exist in the last frame.
+        mask = (padded_trackers[:, -1].abs().sum(dim=-1) != 0)
+        mask = mask.unsqueeze(-1).to(dtype=x.dtype)
 
         score = self.score_head(x)  # B N num_bin
         score = torch.sigmoid(score)  
@@ -219,6 +228,14 @@ class GCN_model(nn.Module):
         
         risk_type = self.risk_type_head(x)  # B N 4
         risk_type = risk_type * mask  # B N 4
+
+        if score.shape != (batch_size, self.num_box, self.num_bin):
+            raise RuntimeError(f"Invalid score_H8 shape: {score.shape}")
+        if risk_type.shape != (batch_size, self.num_box, 4):
+            raise RuntimeError(f"Invalid risk_type shape: {risk_type.shape}")
+        if hx_seq.shape != (
+                batch_size, self.time_steps, self.num_box, self.hidden_size):
+            raise RuntimeError(f"Invalid hx_seq shape: {hx_seq.shape}")
         
         return {'score_H8':score, 'obj_emb':updated_feature, 'risk_type':risk_type, 'hx_seq':hx_seq}
        
@@ -242,7 +259,7 @@ def pad_trackers(trackers, n_max, device):
     counts = []  # record the actual number of valid objects per time step (max n_max)
     for b in range(batch_size):
         for t in range(T):
-            current = trackers[b][t]  # shape: (n, 4)
+            current = trackers[b][t].to(device=device)  # shape: (n, 4)
             n = current.shape[0]
 
             # Keep only the first n_max objects; counts stores the retained size (≤ n_max)

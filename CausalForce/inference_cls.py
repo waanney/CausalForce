@@ -40,7 +40,7 @@ def run_evaluation(args):
         pin_memory=True
     )
 
-    model = GCN_model()
+    model = GCN_model(pretrained=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_model_checkpoint(model, args.checkpoint, map_location=device)

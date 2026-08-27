@@ -112,13 +112,26 @@ class CausalInferenceModule(pl.LightningModule):
 
         B, T, C, H, W = front_imgs.shape
         outputs = self.model(front_imgs, all_objs_bbs)
+        if batch_idx == 0:
+            print("Tensor-shape audit (first batch):", flush=True)
+            print(f"  input [B,T,C,H,W]: {tuple(front_imgs.shape)}", flush=True)
+            print(f"  score_H8 [B,N,H]: {tuple(outputs['score_H8'].shape)}", flush=True)
+            print(f"  risk_type [B,N,4]: {tuple(outputs['risk_type'].shape)}", flush=True)
+            print(f"  hx_seq [B,T,N,D]: {tuple(outputs['hx_seq'].shape)}", flush=True)
+            print(f"  causal_feat [B,N,D]: {tuple(outputs['causal_feat'].shape)}", flush=True)
+            print(f"  scene_feat [B,N,D]: {tuple(outputs['scene_feat'].shape)}", flush=True)
+            print(f"  direct [B,N,H]: {tuple(outputs['direct'].shape)}", flush=True)
+            print(f"  indirect [B,N,H]: {tuple(outputs['indirect'].shape)}", flush=True)
+            first_tracker_shapes = [
+                tuple(frame.shape) for frame in all_objs_bbs[0]]
+            print(f"  first sample tracker frames: {first_tracker_shapes}", flush=True)
 
         for i in range(B):
             pred_risk_score_H8 = outputs["score_H8"][i]
             pred_risk_type = outputs["risk_type"][i]
             gt_risk_ids = label_risk_ids[i]
             gt_risk_score_H8 = label_risk_interval_H8[i]
-            all_objs_id = all_objs_ids[i][-1]
+            all_objs_id = all_objs_ids[i][-1][:pred_risk_score_H8.shape[0]]
 
             if len(all_objs_id) > 0:
                 self.total_sample_cnt += 1
@@ -206,7 +219,7 @@ if __name__ == "__main__":
         test_set, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, collate_fn=custom_collate_fn)
 
-    model = CausalGCN_model()
+    model = CausalGCN_model(pretrained=False)
 
     checkpoint = load_model_checkpoint(
         model, args.checkpoint, map_location="cpu", require_conformal=True)

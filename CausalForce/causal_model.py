@@ -82,7 +82,7 @@ class CausalGCN_model(nn.Module):
         hx, cx = self.lstm(self.drop(fusion_input), (hx, cx))
         return hx, cx
 
-    def forward(self, camera_inputs, trackers, mask=None, device='cuda'):
+    def forward(self, camera_inputs, trackers, mask=None, device=None):
         """
         Args:
             camera_inputs: (B, T, C, H, W)  front-view images
@@ -99,20 +99,33 @@ class CausalGCN_model(nn.Module):
                 direct       (B, N, 8)   NDE logits      (for L_cf)
                 indirect     (B, N, 8)   TIE logits      (for L_cf)
         """
+        if camera_inputs.ndim != 5:
+            raise ValueError(
+                f"camera_inputs must be [B,T,C,H,W], got {camera_inputs.shape}")
+        device = camera_inputs.device
         batch_size = camera_inputs.shape[0]
         t = camera_inputs.shape[1]
         c = camera_inputs.shape[2]
         h = camera_inputs.shape[3]
         w = camera_inputs.shape[4]
+        if t != self.time_steps:
+            raise ValueError(
+                f"Expected T={self.time_steps}, got T={t}")
+        if len(trackers) != batch_size or any(
+                len(sample) != t for sample in trackers):
+            raise ValueError(
+                "trackers must be a B-length list of T-length frame lists")
 
         if mask is None:
-            mask = torch.ones((batch_size, t, c, h, w)).to(device)
+            mask = torch.ones_like(camera_inputs)
+        else:
+            mask = mask.to(device=device, dtype=camera_inputs.dtype)
 
         # Initialize LSTM states for ego + N objects
-        hx = torch.zeros(
-            (batch_size * (1 + self.num_box), self.hidden_size)).to(device)
-        cx = torch.zeros(
-            (batch_size * (1 + self.num_box), self.hidden_size)).to(device)
+        hx = camera_inputs.new_zeros(
+            (batch_size * (1 + self.num_box), self.hidden_size))
+        cx = camera_inputs.new_zeros(
+            (batch_size * (1 + self.num_box), self.hidden_size))
 
         # ═══════════════════════════════════════════════════════
         # Backbone feature extraction (unchanged)
@@ -173,8 +186,7 @@ class CausalGCN_model(nn.Module):
             self.causal_disentangle(obj_hidden, ego_hidden)
 
         # Build validity mask from tracker bounding boxes
-        valid_mask = (padded_trackers[:, -1, :, 2]
-                      + padded_trackers[:, -1, :, 3]) != 0  # (B, N)
+        valid_mask = padded_trackers[:, -1].abs().sum(dim=-1) != 0  # (B, N)
         # MultiheadAttention key_padding_mask: True = ignore
         ego_valid = torch.zeros(
             (batch_size, 1), dtype=torch.bool, device=device)
@@ -196,6 +208,15 @@ class CausalGCN_model(nn.Module):
         score = score * obj_mask        # (B, N, 8)
         risk_type = risk_type * obj_mask  # (B, N, 4)
 
+        expected_prefix = (batch_size, self.num_box)
+        if score.shape != expected_prefix + (self.num_bin,):
+            raise RuntimeError(f"Invalid score_H8 shape: {score.shape}")
+        if risk_type.shape != expected_prefix + (4,):
+            raise RuntimeError(f"Invalid risk_type shape: {risk_type.shape}")
+        if hx_seq.shape != (
+                batch_size, self.time_steps, self.num_box, self.hidden_size):
+            raise RuntimeError(f"Invalid hx_seq shape: {hx_seq.shape}")
+
         return {
             'score_H8': score,
             'risk_type': risk_type,
@@ -206,4 +227,5 @@ class CausalGCN_model(nn.Module):
             'scene_feat': scene_feat,
             'direct': direct * obj_mask,
             'indirect': indirect * obj_mask,
+            'valid_mask': valid_mask,
         }

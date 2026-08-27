@@ -32,7 +32,7 @@ def run_evaluation(args):
         pin_memory=True
     )
 
-    model = GCN_model()
+    model = GCN_model(pretrained=False)
 
     checkpoint = load_model_checkpoint(
         model,
@@ -87,7 +87,8 @@ def run_evaluation(args):
                     pred_risk_type     = outputs["risk_type"][i]           # (num_preds, 4)
                     gt_risk_ids        = label_risk_ids[i]             # list[int]
                     gt_risk_score_H8   = label_risk_interval_H8[i]  # list of tensors (8,)
-                    all_objs_id        = all_objs_ids[i][-1]           # list[int] or (num_objs,)
+                    all_objs_id = all_objs_ids[i][-1][
+                        :pred_risk_score_H8.shape[0]]
 
                     if len(all_objs_id) > 0:
                         total_sample_cnt += 1

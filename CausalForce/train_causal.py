@@ -38,6 +38,7 @@ class CausalForce(pl.LightningModule):
         self.nc_method = "absolute"
 
         self.model = CausalGCN_model(
+            pretrained=False,
             num_confounders=num_confounders,
             num_heads=num_heads,
             cf_alpha=cf_alpha,
