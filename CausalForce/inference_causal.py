@@ -72,8 +72,15 @@ class CausalInferenceModule(pl.LightningModule):
                 raise KeyError(f"Checkpoint is missing SAOCP class {risk_class}")
             coverages.add(getattr(cp, "coverage", None))
             values = self._quantiles(risk_class)
+            residuals = getattr(cp, "residuals", None)
+            horizon_map = getattr(residuals, "horizon2residuals", {})
+            counts = [len(horizon_map.get(t + 1, [])) for t in range(8)]
             formatted = " ".join(f"{value:.6f}" for value in values)
             print(f"  {risk_class}: {formatted}", flush=True)
+            print(f"    calibration counts: {counts}", flush=True)
+            if any(count == 0 for count in counts):
+                raise RuntimeError(
+                    f"Empty SAOCP calibration bucket for {risk_class}: {counts}")
         print(f"SAOCP target coverage value(s): {sorted(coverages, key=str)}", flush=True)
 
     def _debug_tube(self, scenario_id, object_id, risk_class, raw, q, pred, gt, metrics):

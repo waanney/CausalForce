@@ -53,6 +53,7 @@ def run_evaluation(args):
     matched_object_count = 0
     confusion = np.zeros((4, 4), dtype=np.int64)
     visible_object_pred_count = np.zeros(4, dtype=np.int64)
+    matched_logits = []
 
     print("Starting evaluation loop...", flush=True)
     with torch.no_grad():
@@ -103,6 +104,7 @@ def run_evaluation(args):
                     gts = torch.stack(matched_gt).to(preds.device)
 
                 pred_labels = preds.argmax(dim=1)
+                matched_logits.append(preds.detach().float().cpu())
                 window_correct = (pred_labels == gts).sum().item()
                 legacy_window_accuracy_sum += window_correct / len(gts)
                 risk_window_count += 1
@@ -140,6 +142,18 @@ def run_evaluation(args):
     for name, support, precision, recall, f1 in report:
         print(f"  {name:>3} {support:8d} {precision:10.4f} {recall:7.4f} {f1:7.4f}", flush=True)
     print(f"Macro-F1: {macro_f1:.4f}", flush=True)
+    if matched_logits:
+        logits = torch.cat(matched_logits)
+        probabilities = torch.softmax(logits, dim=1)
+        print("Matched Stage 1 logits distribution:", flush=True)
+        print(f"  min={logits.min().item():.6f} max={logits.max().item():.6f} "
+              f"mean={logits.mean().item():.6f} "
+              f"std={logits.std(unbiased=False).item():.6f}", flush=True)
+        print("Matched Stage 1 probability distribution:", flush=True)
+        print(f"  min={probabilities.min().item():.6f} "
+              f"max={probabilities.max().item():.6f} "
+              f"mean={probabilities.mean().item():.6f} "
+              f"std={probabilities.std(unbiased=False).item():.6f}", flush=True)
     print("Confusion matrix (rows=GT, columns=prediction; OBS/OCC/I/C):", flush=True)
     for row in confusion:
         print("  " + " ".join(f"{int(value):8d}" for value in row), flush=True)
