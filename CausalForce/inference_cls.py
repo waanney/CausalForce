@@ -5,7 +5,24 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from data import MultipleRisksDataset, custom_collate_fn
 from classifier import GCN_model
+from checkpoint_utils import load_model_checkpoint
 import numpy as np
+
+
+CLASS_NAMES = ("OBS", "OCC", "I", "C")
+
+
+def classification_report(confusion):
+    rows = []
+    for index, name in enumerate(CLASS_NAMES):
+        tp = confusion[index, index]
+        predicted = confusion[:, index].sum()
+        actual = confusion[index, :].sum()
+        precision = tp / predicted if predicted else 0.0
+        recall = tp / actual if actual else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        rows.append((name, int(actual), precision, recall, f1))
+    return rows
 
 def run_evaluation(args):
     print(f"Loading checkpoint from: {args.checkpoint}", flush=True)
@@ -25,26 +42,22 @@ def run_evaluation(args):
 
     model = GCN_model()
 
-    checkpoint = torch.load(args.checkpoint, map_location='cuda' if torch.cuda.is_available() else 'cpu')
-    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
-    
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        new_key = key.replace("model.", "") if key.startswith("model.") else key
-        new_state_dict[new_key] = value
-
-    model.load_state_dict(new_state_dict)
-    model.cuda()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    load_model_checkpoint(model, args.checkpoint, map_location=device)
+    model.to(device)
     model.eval()
 
-    cls_accuracy = 0.0
-    risk_sample_cnt = 0
-    risk_type_cnt = {'OBS': 0, 'OCC': 0, 'I': 0, 'C': 0}
+    legacy_window_accuracy_sum = 0.0
+    risk_window_count = 0
+    matched_correct = 0
+    matched_object_count = 0
+    confusion = np.zeros((4, 4), dtype=np.int64)
+    visible_object_pred_count = np.zeros(4, dtype=np.int64)
 
     print("Starting evaluation loop...", flush=True)
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
-            front_imgs = batch['front_imgs'].cuda()
+            front_imgs = batch['front_imgs'].to(device)
             all_objs_bbs = batch['all_objs_bbs']
             all_objs_ids = batch['all_objs_id']
             label_risk_ids = batch['risk_id']
@@ -55,16 +68,18 @@ def run_evaluation(args):
             for b in range(len(all_objs_bbs)):
                 sample_bbs = []
                 for t in range(len(all_objs_bbs[b])):
-                    sample_bbs.append(all_objs_bbs[b][t].cuda())
+                    sample_bbs.append(all_objs_bbs[b][t].to(device))
                 all_objs_bbs_cuda.append(sample_bbs)
 
-            outputs = model(front_imgs, all_objs_bbs_cuda, device='cuda')
+            outputs = model(front_imgs, all_objs_bbs_cuda, device=device)
 
             B = front_imgs.shape[0]
             for i in range(B):
                 pred_risk_type = outputs["risk_type"][i]        # (num_preds, 4)
                 gt_risk_ids    = label_risk_ids[i]             # list[int]
-                all_objs_id    = all_objs_ids[i][-1]           # list[int] or (num_objs,)
+                # The model truncates detections to NUM_BOX slots. Keep IDs in
+                # the identical order and truncate them at the same boundary.
+                all_objs_id = all_objs_ids[i][-1][:pred_risk_type.shape[0]]
                 gt_risk_types  = label_risk_type[i]            # list[int] or (num_objs,)
                 
                 N = len(all_objs_id)
@@ -87,28 +102,51 @@ def run_evaluation(args):
                 else:
                     gts = torch.stack(matched_gt).to(preds.device)
 
-                accuracy = (preds.argmax(dim=1) == gts).float().mean().item()
-                cls_accuracy += accuracy
-                risk_sample_cnt += 1
+                pred_labels = preds.argmax(dim=1)
+                window_correct = (pred_labels == gts).sum().item()
+                legacy_window_accuracy_sum += window_correct / len(gts)
+                risk_window_count += 1
+                matched_correct += window_correct
+                matched_object_count += len(gts)
+                for gt_label, pred_label in zip(
+                        gts.detach().cpu().tolist(),
+                        pred_labels.detach().cpu().tolist()):
+                    confusion[int(gt_label), int(pred_label)] += 1
 
                 risk_type = pred_risk_type[:N].argmax(dim=1).cpu().numpy()
                 for rt in risk_type:
-                    if rt == 0: risk_type_cnt['OBS'] += 1
-                    elif rt == 1: risk_type_cnt['OCC'] += 1
-                    elif rt == 2: risk_type_cnt['I'] += 1
-                    elif rt == 3: risk_type_cnt['C'] += 1
+                    visible_object_pred_count[int(rt)] += 1
 
             if (batch_idx + 1) % 50 == 0 or (batch_idx + 1) == len(test_loader):
-                cur_acc = (cls_accuracy / risk_sample_cnt * 100) if risk_sample_cnt > 0 else 0.0
-                print(f"Batch [{batch_idx + 1}/{len(test_loader)}] | Evaluated Samples: {risk_sample_cnt} | Current Accuracy: {cur_acc:.2f}%", flush=True)
+                cur_acc = (100 * matched_correct / matched_object_count
+                           if matched_object_count else 0.0)
+                print(f"Batch [{batch_idx + 1}/{len(test_loader)}] | "
+                      f"Risk windows: {risk_window_count} | "
+                      f"Matched risk objects: {matched_object_count} | "
+                      f"Micro accuracy: {cur_acc:.2f}%", flush=True)
 
-    acc = (cls_accuracy / risk_sample_cnt) if risk_sample_cnt > 0 else 0.0
+    micro_accuracy = matched_correct / matched_object_count if matched_object_count else 0.0
+    legacy_accuracy = (legacy_window_accuracy_sum / risk_window_count
+                       if risk_window_count else 0.0)
+    report = classification_report(confusion)
+    macro_f1 = sum(row[4] for row in report) / len(report)
     print("\n=======================================================", flush=True)
-    print(f"FINAL RESULT - Stage 1 Classifier Validation Accuracy: {acc * 100:.2f}% ({acc:.4f})", flush=True)
-    print(f"Total Risk Samples Evaluated: {risk_sample_cnt}", flush=True)
-    print("Risk Type Predictions Count:", flush=True)
-    for risk_type, count in risk_type_cnt.items():
-        print(f"  - {risk_type}: {count}", flush=True)
+    print(f"Stage 1 matched-object micro accuracy: {micro_accuracy * 100:.2f}%", flush=True)
+    print(f"Legacy mean-per-window accuracy: {legacy_accuracy * 100:.2f}%", flush=True)
+    print(f"Risk windows evaluated: {risk_window_count}", flush=True)
+    print(f"Matched risk-object observations: {matched_object_count}", flush=True)
+    print("Per-class metrics on matched risk objects:", flush=True)
+    print("  class  support  precision  recall  F1", flush=True)
+    for name, support, precision, recall, f1 in report:
+        print(f"  {name:>3} {support:8d} {precision:10.4f} {recall:7.4f} {f1:7.4f}", flush=True)
+    print(f"Macro-F1: {macro_f1:.4f}", flush=True)
+    print("Confusion matrix (rows=GT, columns=prediction; OBS/OCC/I/C):", flush=True)
+    for row in confusion:
+        print("  " + " ".join(f"{int(value):8d}" for value in row), flush=True)
+    print("Predicted classes for all visible object observations", flush=True)
+    print("(includes non-risk objects and repeated sliding-window observations):", flush=True)
+    for index, name in enumerate(CLASS_NAMES):
+        print(f"  - {name}: {int(visible_object_pred_count[index])}", flush=True)
     print("=======================================================\n", flush=True)
 
 if __name__ == "__main__":
