@@ -263,6 +263,18 @@ class CausalForce(pl.LightningModule):
 
         return total_loss
 
+    def on_train_epoch_end(self):
+        metrics = self.trainer.callback_metrics
+        train_loss = metrics.get("total_loss", torch.tensor(0.0)).item()
+        val_loss = metrics.get("val_total_loss", torch.tensor(0.0)).item()
+        loss_score = metrics.get("loss_score", torch.tensor(0.0)).item()
+        loss_htsc = metrics.get("loss_htsc", torch.tensor(0.0)).item()
+        loss_cf = metrics.get("loss_cf", torch.tensor(0.0)).item()
+        print(
+            f"\n==================== [Epoch {self.current_epoch:02d}] Train: {train_loss:.5f} | Val: {val_loss:.5f} | Score: {loss_score:.5f} | HTSC: {loss_htsc:.5f} | CF: {loss_cf:.5f} ====================\n",
+            flush=True,
+        )
+
     def forward(self, batch):
         pass
 

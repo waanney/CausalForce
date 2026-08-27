@@ -74,6 +74,12 @@ class GCN_LSTM_CLS(pl.LightningModule):
 
         return total_loss
 
+    def on_train_epoch_end(self):
+        metrics = self.trainer.callback_metrics
+        train_loss = metrics.get("total_loss", torch.tensor(0.0)).item()
+        val_loss = metrics.get("val_total_loss", torch.tensor(0.0)).item()
+        print(f"\n==================== [Epoch {self.current_epoch:02d}] Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} ====================\n", flush=True)
+
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-7)
         lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 6, 0.5)
