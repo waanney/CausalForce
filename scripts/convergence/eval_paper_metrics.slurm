@@ -40,6 +40,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             fsspec \
             packaging \
             online-conformal \
+            salesforce-merlion \
             efficientnet-pytorch \
             einops \
             timm \

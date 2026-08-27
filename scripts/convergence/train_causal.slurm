@@ -41,6 +41,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             fsspec \
             packaging \
             online-conformal \
+            salesforce-merlion \
             efficientnet-pytorch \
             einops \
             timm \
@@ -49,7 +50,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
 # ─── Paths ───
 TRAIN_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/train/"
 VAL_DATA="$HOME/data/MCR_Dataset/Risk-Datasets-Venue/val/"
-CLS_CKPT="$HOME/CausalForce/log/risk_category_classifier/best_epoch*.ckpt"
+CLS_CKPT="$HOME/CausalForce/log/risk_category_classifier/epoch=9-last.ckpt"
 
 # ─── Causal Hyperparameters ───
 EXP_ID="CausalForce_v1"

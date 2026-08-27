@@ -22,6 +22,7 @@ pip download --no-deps pyDeprecate==0.3.2 -d $HOME/pip_wheels
 pip download --no-deps fsspec==2022.5.0 -d $HOME/pip_wheels
 pip download --no-deps packaging==21.3 -d $HOME/pip_wheels
 pip download --no-deps online-conformal==1.0.2 -d $HOME/pip_wheels
+pip download --no-deps salesforce-merlion -d $HOME/pip_wheels
 pip download --no-deps efficientnet-pytorch==0.7.1 -d $HOME/pip_wheels
 pip download --no-deps einops==0.4.1 -d $HOME/pip_wheels
 
