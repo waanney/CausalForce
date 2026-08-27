@@ -9,28 +9,12 @@ from data import MultipleRisksDataset, custom_collate_fn
 from model import GCN_model
 from checkpoint_utils import load_model_checkpoint
 import numpy as np
-
-def pic_star(pred, gt, tau=2, mode="detect"):
-    gt   = np.asarray(gt.cpu(),   dtype=np.int8)
-    pred = np.asarray(pred.cpu(), dtype=np.int8)
-    assert gt.shape == pred.shape, "gt & pred must have same length"
-    n = len(gt)
-
-    ones = np.where(gt == 1)[0]
-    if len(ones) == 0:
-        return 1.0
-
-    T_s, T_e = ones[0], ones[-1]
-    center   = T_s if mode == "detect" else T_e
-
-    t = np.arange(n)
-    w = np.exp(-np.abs(t - center) / tau)
-    W = w.sum()
-
-    f1 = 1 - np.abs(gt - pred)
-    loss   = (w * (1 - f1)).sum() / W
-    score  = 1 - loss
-    return score
+from risk_tube_metrics import (
+    conformal_risk_mask,
+    evaluate_risk_tube,
+    pic_star,
+    temporal_consistency,
+)
 
 def run_evaluation(args):
     print(f"Loading checkpoint from: {args.checkpoint}", flush=True)
@@ -121,7 +105,10 @@ def run_evaluation(args):
                         else:
                             q_vec = torch.full((8,), 0.5, device=pred_risk_score_H8.device)
 
-                        pred_risk_mask = (pred_risk_score_H8[j] >= (1 - q_vec)).long()
+                        pred_np = conformal_risk_mask(
+                            pred_risk_score_H8[j], q_vec)
+                        pred_risk_mask = torch.as_tensor(
+                            pred_np, device=pred_risk_score_H8.device)
 
                         if obj_id in gt_risk_ids:
                             idx = gt_risk_ids.index(obj_id)
@@ -134,36 +121,23 @@ def run_evaluation(args):
                             total_risk_obj_pred_tube_volume += pred_risk_mask.sum().item()
                             total_gt_risk_obj_tube_volume += gt_risk_mask.sum().item()
 
-                            pred = pred_risk_mask.bool()
-                            gt   = gt_risk_mask.bool()
-                            intersection = (pred & gt).sum().float()
-                            union        = (pred | gt).sum().float()
-                            cur_iou = intersection / (union + 1e-6)
-                            iou += cur_iou.item()
-
-                            transitions_pred = (pred_risk_mask[1:] != pred_risk_mask[:-1]).sum().item()
-                            transitions_gt   = (gt_risk_mask[1:] != gt_risk_mask[:-1]).sum().item()
-
-                            fragmented_prediction_pen = 1.0 - (np.abs(transitions_pred - transitions_gt) / 7.0)
-                            if np.abs(transitions_pred - transitions_gt) >= 0:
-                                trasition_cnt += 1
-                                fragmented_prediction_penalty += fragmented_prediction_pen
-
-                            d_pen_pic = pic_star(pred_risk_mask, gt_risk_mask, mode="detect")
-                            e_pen_pic = pic_star(pred_risk_mask, gt_risk_mask, mode="release")
-                            detect_penalty_pic += d_pen_pic
-                            release_penalty_pic += e_pen_pic
-                            risk_interval_iou_pic += (cur_iou.item() * (0.5 * (d_pen_pic + e_pen_pic) + fragmented_prediction_pen) / 2.0)
-
-                            if torch.all(pred_risk_mask[gt_risk_mask == 1] == 1):
-                                covered += 1
+                            metrics = evaluate_risk_tube(
+                                pred_risk_mask, gt_risk_mask)
+                            iou += metrics["iou"]
+                            trasition_cnt += 1
+                            fragmented_prediction_penalty += metrics[
+                                "temporal_consistency"]
+                            detect_penalty_pic += metrics[
+                                "detect_alignment"]
+                            release_penalty_pic += metrics[
+                                "release_alignment"]
+                            risk_interval_iou_pic += metrics["risk_iou"]
+                            covered += int(metrics["coverage"])
                         else:
                             total_non_risk_obj_pred_tube_volume += pred_risk_mask.sum().item()
-                            transitions_pred = (pred_risk_mask[1:] != pred_risk_mask[:-1]).sum().item()
-                            fragmented_prediction_pen = 1.0 - (np.abs(transitions_pred) / 7.0)
-                            if np.abs(transitions_pred) >= 0:
-                                trasition_cnt += 1
-                                fragmented_prediction_penalty += fragmented_prediction_pen
+                            trasition_cnt += 1
+                            fragmented_prediction_penalty += temporal_consistency(
+                                pred_np, np.zeros_like(pred_np))
 
                 if (batch_idx + 1) % 50 == 0 or (batch_idx + 1) == len(test_loader):
                     cur_cov = (covered / total_gt_risk_obj_cnt) if total_gt_risk_obj_cnt > 0 else 0.0
