@@ -76,7 +76,7 @@ python train_causal.py \
     --val_data ${VAL_DATA} \
     --epochs ${EPOCHS} \
     --lr ${LR} \
-    --val_every 3 \
+    --val_every 1 \
     --batch_size ${BATCH_SIZE} \
     --num_workers ${NUM_WORKERS} \
     --precision 16 \

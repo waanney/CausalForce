@@ -123,7 +123,7 @@ class GCN_LSTM_CLS(pl.LightningModule):
 
         val_total_loss = val_total_loss / B
 
-        self.log("val_total_loss", val_total_loss, prog_bar=True, sync_dist=True)
+        self.log("val_total_loss", val_total_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 	
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

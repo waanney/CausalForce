@@ -254,11 +254,12 @@ class CausalForce(pl.LightningModule):
         total_loss = total_loss + w_ortho_cur * total_loss_ortho
 
         # Logging
-        self.log(f"{prefix}total_loss", total_loss, prog_bar=True)
-        self.log(f"{prefix}loss_score", total_loss_score, prog_bar=True)
-        self.log(f"{prefix}loss_htsc", total_loss_htsc, prog_bar=True)
-        self.log(f"{prefix}loss_ortho", total_loss_ortho, prog_bar=False)
-        self.log(f"{prefix}loss_cf", total_loss_cf, prog_bar=False)
+        is_train = (prefix == "")
+        self.log(f"{prefix}total_loss", total_loss, on_step=is_train, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log(f"{prefix}loss_score", total_loss_score, on_step=is_train, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log(f"{prefix}loss_htsc", total_loss_htsc, on_step=is_train, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log(f"{prefix}loss_ortho", total_loss_ortho, on_step=is_train, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log(f"{prefix}loss_cf", total_loss_cf, on_step=is_train, on_epoch=True, prog_bar=False, sync_dist=True)
 
         return total_loss
 
