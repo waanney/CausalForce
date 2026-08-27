@@ -107,8 +107,13 @@ class CausalForce(pl.LightningModule):
         total_loss_cf = torch.tensor(0.0, device=self.device)
 
         # ── Per-batch orthogonality loss (global, not per-sample) ──
-        loss_ortho = orthogonality_loss(
-            outputs['causal_feat'], outputs['scene_feat'])
+        valid_mask = outputs['valid_mask']
+        if valid_mask.any():
+            loss_ortho = orthogonality_loss(
+                outputs['causal_feat'][valid_mask],
+                outputs['scene_feat'][valid_mask])
+        else:
+            loss_ortho = outputs['causal_feat'].sum() * 0.0
         total_loss_ortho = loss_ortho
 
         for i in range(B):

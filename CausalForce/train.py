@@ -62,65 +62,61 @@ def htsc_loss(
     Returns:
       A scalar Tensor; returns 0 if no valid pairs are found.
     """
-    device = hx_seq.device
-    T, N, H = hx_seq.shape
+    T, N, _ = hx_seq.shape
+    if T < 2 or len(all_objs_id) < T:
+        return hx_seq.sum() * 0.0
 
-    # 1) Obtain the class label (0..C-1) for each object
-    risk_labels = pred_risk_type.argmax(dim=1).tolist()  # convert to Python list
+    # Category logits correspond to object slots in the final input frame.
+    final_ids = list(all_objs_id[-1])[:N]
+    risk_labels = pred_risk_type[:len(final_ids)].argmax(dim=1).tolist()
+    label_by_id = {
+        object_id: risk_labels[index]
+        for index, object_id in enumerate(final_ids)
+    }
 
-    total_loss = torch.tensor(0.0, device=device)
-    count = 0
-
-    # 2) Iterate through each adjacent frame pair (t, t+1)
+    losses = []
     for t in range(T - 1):
-        prev_ids = all_objs_id[t]     # may be an empty list
-        next_ids = all_objs_id[t + 1] # may be an empty list
+        prev_ids = list(all_objs_id[t])[:N]
+        next_ids = list(all_objs_id[t + 1])[:N]
+        prev_index = {object_id: index for index, object_id in enumerate(prev_ids)}
+        next_index = {object_id: index for index, object_id in enumerate(next_ids)}
 
-        # Skip if either frame has no objects
-        if not prev_ids or not next_ids:
-            continue
+        # Both objects in a pair must be trackable across t and t+1, and their
+        # category must be known from the final-frame classifier output.
+        common_ids = [
+            object_id for object_id in prev_ids
+            if object_id in next_index and object_id in label_by_id
+        ]
+        for first in range(len(common_ids)):
+            object_i = common_ids[first]
+            for second in range(first + 1, len(common_ids)):
+                object_k = common_ids[second]
+                if label_by_id[object_i] != label_by_id[object_k]:
+                    continue
 
-        # Build ID→index mapping for the previous frame
-        id2idx_prev = {oid: idx for idx, oid in enumerate(prev_ids)}
+                i_t, i_next = prev_index[object_i], next_index[object_i]
+                k_t, k_next = prev_index[object_k], next_index[object_k]
+                cos_spatial = F.cosine_similarity(
+                    hx_seq[t, i_t].unsqueeze(0),
+                    hx_seq[t, k_t].unsqueeze(0), dim=1,
+                )[0]
+                if sim_thr > 0 and cos_spatial.detach().item() < sim_thr:
+                    continue
 
-        # For each object in the next frame, compute temporal and spatial similarity
-        # if the same ID also exists in the previous frame
-        for j, oid in enumerate(next_ids):
-            if oid not in id2idx_prev:
-                continue
-            i = id2idx_prev[oid]
+                cos_temporal_i = F.cosine_similarity(
+                    hx_seq[t, i_t].unsqueeze(0),
+                    hx_seq[t + 1, i_next].unsqueeze(0), dim=1,
+                )[0]
+                cos_temporal_k = F.cosine_similarity(
+                    hx_seq[t, k_t].unsqueeze(0),
+                    hx_seq[t + 1, k_next].unsqueeze(0), dim=1,
+                )[0]
+                delta_temporal = cos_temporal_i - cos_temporal_k
+                losses.append((cos_spatial - delta_temporal).pow(2))
 
-            f_prev = hx_seq[t,   i]    # (H,)
-            f_next = hx_seq[t + 1, j]  # (H,)
-
-            # Temporal similarity: cosine similarity between the same object's features across frames
-            cos_temp = F.cosine_similarity(
-                f_prev.unsqueeze(0), f_next.unsqueeze(0), dim=1
-            )[0]
-
-            # Spatial similarity: in frame t, find the first object k of the same class (k != i)
-            spatial_idxs = [
-                k for k in range(N)
-                if k != i and risk_labels[k] == risk_labels[i]
-            ]
-            if not spatial_idxs:
-                continue
-            k = spatial_idxs[0]
-            f_spat = hx_seq[t, k]
-            cos_spat = F.cosine_similarity(
-                f_prev.unsqueeze(0), f_spat.unsqueeze(0), dim=1
-            )[0]
-
-            # Skip if spatial similarity below threshold
-            if sim_thr > 0 and cos_spat < sim_thr:
-                continue
-
-            # Accumulate (cos_spat - cos_temp)^2
-            total_loss = total_loss + (cos_spat - cos_temp) ** 2
-            count += 1
-
-    # Return average or 0 if no valid samples
-    return total_loss / count if count > 0 else torch.tensor(0.0, device=device)
+    if not losses:
+        return hx_seq.sum() * 0.0
+    return torch.stack(losses).mean()
 
  
 class CausalForce_CACC_STFA(pl.LightningModule):
@@ -515,6 +511,5 @@ if __name__ == "__main__":
                                             )
 
     trainer.fit(CausalForce_CACC_STFA_Model, dataloader_train, dataloader_val)
-
 
 
