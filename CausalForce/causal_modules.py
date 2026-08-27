@@ -198,8 +198,8 @@ def counterfactual_loss(direct, indirect, gt_risk_score):
     """
     direct_pred = torch.sigmoid(direct)
     indirect_pred = torch.sigmoid(indirect)
-    L_direct = F.binary_cross_entropy(direct_pred, gt_risk_score, reduction='mean')
-    L_indirect = F.binary_cross_entropy(indirect_pred, gt_risk_score, reduction='mean')
+    L_direct = F.binary_cross_entropy(direct_pred.float(), gt_risk_score.float(), reduction='mean')
+    L_indirect = F.binary_cross_entropy(indirect_pred.float(), gt_risk_score.float(), reduction='mean')
     return L_direct + 0.5 * L_indirect
 
 
