@@ -109,8 +109,9 @@ class CausalForce(pl.LightningModule):
 
             elif len(gt_risk_ids) == 0:
                 gt_zeros = torch.zeros_like(pred_risk_score_H8[:N])
-                loss_scoreH8_i = F.binary_cross_entropy(
-                    pred_risk_score_H8[:N].float(), gt_zeros.float(), reduction='mean')
+                with torch.cuda.amp.autocast(enabled=False):
+                    loss_scoreH8_i = F.binary_cross_entropy(
+                        pred_risk_score_H8[:N].float(), gt_zeros.float(), reduction='mean')
                 loss_htsc_i = htsc_loss(
                     hx_seq=outputs["hx_seq"][i],
                     pred_risk_type=outputs["risk_type"][i],
@@ -155,8 +156,9 @@ class CausalForce(pl.LightningModule):
 
                 if len(matched_pred) == 0:
                     gt_zeros = torch.zeros_like(pred_risk_score_H8[:N])
-                    loss_scoreH8_i = F.binary_cross_entropy(
-                        pred_risk_score_H8[:N].float(), gt_zeros.float(), reduction='mean')
+                    with torch.cuda.amp.autocast(enabled=False):
+                        loss_scoreH8_i = F.binary_cross_entropy(
+                            pred_risk_score_H8[:N].float(), gt_zeros.float(), reduction='mean')
                     loss_cf_i = counterfactual_loss(
                         pred_direct[:N], pred_indirect[:N], gt_zeros)
 
@@ -180,8 +182,9 @@ class CausalForce(pl.LightningModule):
                     i_stack = torch.stack(matched_indirect)
 
                     if len(non_risk_pred) == 0:
-                        loss_scoreH8_i = F.binary_cross_entropy(
-                            preds.float(), gts.float(), reduction='mean')
+                        with torch.cuda.amp.autocast(enabled=False):
+                            loss_scoreH8_i = F.binary_cross_entropy(
+                                preds.float(), gts.float(), reduction='mean')
                         loss_cf_i = counterfactual_loss(
                             d_stack, i_stack, gts)
                     else:
@@ -190,9 +193,10 @@ class CausalForce(pl.LightningModule):
                         nr_d = torch.stack(non_risk_direct)
                         nr_i = torch.stack(non_risk_indirect)
 
-                        loss_scoreH8_i = (
-                            F.binary_cross_entropy(preds.float(), gts.float(), reduction='mean')
-                            + F.binary_cross_entropy(nr_preds.float(), nr_gt.float(), reduction='mean'))
+                        with torch.cuda.amp.autocast(enabled=False):
+                            loss_scoreH8_i = (
+                                F.binary_cross_entropy(preds.float(), gts.float(), reduction='mean')
+                                + F.binary_cross_entropy(nr_preds.float(), nr_gt.float(), reduction='mean'))
                         loss_cf_i = (
                             counterfactual_loss(d_stack, i_stack, gts)
                             + counterfactual_loss(nr_d, nr_i, nr_gt))
