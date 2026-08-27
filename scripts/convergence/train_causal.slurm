@@ -43,6 +43,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             online-conformal \
             salesforce-merlion \
             dill \
+            plotly \
             efficientnet-pytorch \
             einops \
             timm \
