@@ -34,7 +34,7 @@ export PYTHONPATH=$PYTHONUSERBASE/lib/python3.8/site-packages:$PYTHONPATH
 mkdir -p $PYTHONUSERBASE
 
 # ─── Install extra packages offline ───
-pip install --no-index --find-links=$HOME/pip_wheels --user \
+pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             pytorch-lightning \
             torchmetrics \
             pyDeprecate \
