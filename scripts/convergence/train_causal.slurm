@@ -34,7 +34,7 @@ export PYTHONPATH=$PYTHONUSERBASE/lib/python3.8/site-packages:$PYTHONPATH
 mkdir -p $PYTHONUSERBASE
 
 # ─── Install extra packages offline ───
-pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
+pip install --no-index --find-links=$HOME/pip_wheels --user \
             pytorch-lightning \
             torchmetrics \
             pyDeprecate \
@@ -42,6 +42,7 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             packaging \
             online-conformal \
             salesforce-merlion \
+            dill \
             efficientnet-pytorch \
             einops \
             timm \
