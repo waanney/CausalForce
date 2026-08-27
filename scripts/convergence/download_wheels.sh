@@ -15,7 +15,7 @@ echo "Downloading pre-built offline packages..."
 # 1. Download pytorch-lightning 1.7.7 wheel via curl (using -L to follow redirects)
 curl -sSL -L "https://files.pythonhosted.org/packages/00/eb/3b2152f9c3a50d265f3e75529254228ace8a86e9a4397f3004f1e3be7825/pytorch_lightning-1.7.7-py3-none-any.whl" -o $HOME/pip_wheels/pytorch_lightning-1.7.7-py3-none-any.whl
 
-# 2. Download pre-built wheels compatible with Python 3.8
+# 2. Download pre-built wheels strictly targeted for Python 3.8 Linux x86_64
 pip download --no-deps timm==0.6.13 -d $HOME/pip_wheels
 pip download --no-deps torchmetrics==0.9.3 -d $HOME/pip_wheels
 pip download --no-deps pyDeprecate==0.3.2 -d $HOME/pip_wheels
@@ -23,7 +23,7 @@ pip download --no-deps fsspec==2022.5.0 -d $HOME/pip_wheels
 pip download --no-deps packaging==21.3 -d $HOME/pip_wheels
 pip download --no-deps online-conformal==1.0.2 -d $HOME/pip_wheels
 pip download --no-deps salesforce-merlion==2.0.2 -d $HOME/pip_wheels
-pip download --no-deps statsmodels==0.13.5 -d $HOME/pip_wheels
+pip download --only-binary=:all: --platform manylinux2014_x86_64 --python-version 38 --implementation cp --no-deps statsmodels==0.14.0 -d $HOME/pip_wheels
 pip download --no-deps patsy==0.5.6 -d $HOME/pip_wheels
 pip download --no-deps dill==0.3.7 -d $HOME/pip_wheels
 pip download --no-deps plotly==5.18.0 -d $HOME/pip_wheels
