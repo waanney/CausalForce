@@ -267,10 +267,12 @@ class CausalForce(pl.LightningModule):
 
         return total_loss
 
-    def on_train_epoch_end(self):
+    def on_validation_epoch_end(self):
+        if self.trainer.sanity_checking:
+            return
         metrics = self.trainer.callback_metrics
-        train_loss = metrics.get("total_loss", torch.tensor(0.0)).item()
-        val_loss = metrics.get("val_total_loss", torch.tensor(0.0)).item()
+        train_loss = metrics.get("total_loss_epoch", metrics.get("total_loss", torch.tensor(0.0))).item()
+        val_loss = metrics.get("val_total_loss", metrics.get("val_total_loss_epoch", torch.tensor(0.0))).item()
         loss_score = metrics.get("loss_score", torch.tensor(0.0)).item()
         loss_htsc = metrics.get("loss_htsc", torch.tensor(0.0)).item()
         loss_cf = metrics.get("loss_cf", torch.tensor(0.0)).item()
