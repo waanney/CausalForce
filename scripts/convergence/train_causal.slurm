@@ -70,6 +70,7 @@ CF_ALPHA=0.3
 W_ORTHO=0.1
 W_CF=0.5
 ORTHO_RAMP=4
+COVERAGE=0.9
 EPOCHS=15
 LR=0.0001
 BATCH_SIZE=18
@@ -99,6 +100,7 @@ python train_causal.py \
     --cf_alpha ${CF_ALPHA} \
     --w_ortho ${W_ORTHO} \
     --w_cf ${W_CF} \
+    --coverage ${COVERAGE} \
     --ortho_ramp_epochs ${ORTHO_RAMP}
 
 echo "Finished at: $(date)"

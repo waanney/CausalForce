@@ -38,6 +38,7 @@ CF_ALPHA=0.3          # counterfactual branch weight
 W_ORTHO=0.1           # orthogonality loss weight
 W_CF=0.5              # counterfactual loss weight
 ORTHO_RAMP=4          # epochs to ramp up L_ortho from 0→W_ORTHO
+COVERAGE=0.9           # target SAOCP coverage on validation calibration pass
 EPOCHS=15
 LR=0.0001
 BATCH_SIZE=4
@@ -62,6 +63,7 @@ python train_causal.py \
     --cf_alpha ${CF_ALPHA} \
     --w_ortho ${W_ORTHO} \
     --w_cf ${W_CF} \
+    --coverage ${COVERAGE} \
     --ortho_ramp_epochs ${ORTHO_RAMP}
 
 echo "Finished at: $(date)"

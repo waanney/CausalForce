@@ -29,12 +29,12 @@ from checkpoint_utils import load_partial_checkpoint
 class CausalForce(pl.LightningModule):
     def __init__(self, lr, num_confounders=64, num_heads=4, cf_alpha=0.3,
                  w_score=1.0, w_htsc=10.0, w_ortho=0.1, w_cf=0.5,
-                 ortho_ramp_epochs=4):
+                 ortho_ramp_epochs=4, coverage=0.9):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
 
-        self.coverage = 0.7
+        self.coverage = coverage
         self.nc_method = "absolute"
 
         self.model = CausalGCN_model(
@@ -43,16 +43,7 @@ class CausalForce(pl.LightningModule):
             cf_alpha=cf_alpha,
         )
 
-        self.class_cps = {
-            'OBS': SAOCP(model=None, train_data=None, max_scale=1.0,
-                         coverage=self.coverage, horizon=8),
-            'OCC': SAOCP(model=None, train_data=None, max_scale=1.0,
-                         coverage=self.coverage, horizon=8),
-            'I':   SAOCP(model=None, train_data=None, max_scale=1.0,
-                         coverage=self.coverage, horizon=8),
-            'C':   SAOCP(model=None, train_data=None, max_scale=1.0,
-                         coverage=self.coverage, horizon=8),
-        }
+        self.class_cps = self._new_class_cps()
         self.index_to_class = {0: 'OBS', 1: 'OCC', 2: 'I', 3: 'C'}
 
         # Loss weights
@@ -62,6 +53,32 @@ class CausalForce(pl.LightningModule):
         self.w_cf = w_cf
         self.ortho_ramp_epochs = ortho_ramp_epochs
 
+    def _new_class_cps(self):
+        return {
+            'OBS': SAOCP(model=None, train_data=None, max_scale=1.0,
+                         coverage=self.coverage, horizon=8),
+            'OCC': SAOCP(model=None, train_data=None, max_scale=1.0,
+                         coverage=self.coverage, horizon=8),
+            'I':   SAOCP(model=None, train_data=None, max_scale=1.0,
+                         coverage=self.coverage, horizon=8),
+            'C':   SAOCP(model=None, train_data=None, max_scale=1.0,
+                         coverage=self.coverage, horizon=8),
+        }
+
+    def _update_conformal(self, type_predictions, score_predictions, targets):
+        """Predict-then-update SAOCP with one fixed-model calibration stream."""
+        for type_pred, obj_pred, obj_gt in zip(
+                type_predictions, score_predictions, targets):
+            pred_cls = self.index_to_class[type_pred.argmax().item()]
+            nc = compute_nonconformity(
+                obj_pred.detach(), obj_gt.detach(), method=self.nc_method)
+            for t in range(8):
+                nc_t = pd.Series([nc[t].item()], dtype=float)
+                self.class_cps[pred_cls].update(
+                    ground_truth=nc_t,
+                    forecast=pd.Series([0], dtype=float),
+                    horizon=t + 1)
+
     def _get_ortho_weight(self):
         """Ramp up orthogonality loss from 0 → w_ortho over first N epochs."""
         if self.ortho_ramp_epochs <= 0:
@@ -69,7 +86,8 @@ class CausalForce(pl.LightningModule):
         progress = min(self.current_epoch / self.ortho_ramp_epochs, 1.0)
         return self.w_ortho * progress
 
-    def _compute_step_losses(self, batch, prefix=""):
+    def _compute_step_losses(
+            self, batch, prefix="", update_conformal=False):
         """Shared logic for training_step and validation_step."""
         front_imgs = batch['front_imgs']
         all_objs_bbs = batch['all_objs_bbs']
@@ -99,7 +117,7 @@ class CausalForce(pl.LightningModule):
             pred_indirect = outputs["indirect"][i]
             gt_risk_ids = label_risk_ids[i]
             gt_risk_score_H8 = label_risk_interval_H8[i]
-            all_objs_id = all_objs_ids[i][-1]
+            all_objs_id = all_objs_ids[i][-1][:pred_risk_score_H8.shape[0]]
 
             N = len(all_objs_id)
 
@@ -121,18 +139,9 @@ class CausalForce(pl.LightningModule):
                 loss_cf_i = counterfactual_loss(
                     pred_direct[:N], pred_indirect[:N], gt_zeros)
 
-                # Update conformal predictors
-                for type_pred, obj_pred, obj_gt in zip(
-                        pred_risk_type[:N], pred_risk_score_H8[:N], gt_zeros):
-                    pred_cls = self.index_to_class[type_pred.argmax().item()]
-                    nc = compute_nonconformity(
-                        obj_pred, obj_gt, method=self.nc_method)
-                    for t in range(8):
-                        nc_t = pd.Series([nc[t].item()], dtype=float)
-                        self.class_cps[pred_cls].update(
-                            ground_truth=nc_t,
-                            forecast=pd.Series([0], dtype=float),
-                            horizon=t + 1)
+                if update_conformal:
+                    self._update_conformal(
+                        pred_risk_type[:N], pred_risk_score_H8[:N], gt_zeros)
 
             else:
                 matched_pred, matched_gt = [], []
@@ -163,19 +172,10 @@ class CausalForce(pl.LightningModule):
                     loss_cf_i = counterfactual_loss(
                         pred_direct[:N], pred_indirect[:N], gt_zeros)
 
-                    for type_pred, obj_pred, obj_gt in zip(
+                    if update_conformal:
+                        self._update_conformal(
                             pred_risk_type[:N], pred_risk_score_H8[:N],
-                            gt_zeros):
-                        pred_cls = self.index_to_class[
-                            type_pred.argmax().item()]
-                        nc = compute_nonconformity(
-                            obj_pred, obj_gt, method=self.nc_method)
-                        for t in range(8):
-                            nc_t = pd.Series([nc[t].item()], dtype=float)
-                            self.class_cps[pred_cls].update(
-                                ground_truth=nc_t,
-                                forecast=pd.Series([0], dtype=float),
-                                horizon=t + 1)
+                            gt_zeros)
                 else:
                     preds = torch.stack(matched_pred)
                     gts = torch.stack(matched_gt)
@@ -202,36 +202,16 @@ class CausalForce(pl.LightningModule):
                             counterfactual_loss(d_stack, i_stack, gts)
                             + counterfactual_loss(nr_d, nr_i, nr_gt))
 
-                    # Update conformal for matched
-                    for type_pred, obj_pred, obj_gt in zip(
-                            match_pred_type, matched_pred, matched_gt):
-                        pred_cls = self.index_to_class[
-                            type_pred.argmax().item()]
-                        nc = compute_nonconformity(
-                            obj_pred, obj_gt, method=self.nc_method)
-                        for t in range(8):
-                            nc_t = pd.Series([nc[t].item()], dtype=float)
-                            self.class_cps[pred_cls].update(
-                                ground_truth=nc_t,
-                                forecast=pd.Series([0], dtype=float),
-                                horizon=t + 1)
+                    if update_conformal:
+                        self._update_conformal(
+                            match_pred_type, matched_pred, matched_gt)
 
                     # Update conformal for non-risk
-                    if len(non_risk_pred) > 0:
-                        for type_pred, obj_pred, obj_gt in zip(
-                                non_risk_pred_type,
-                                [p.detach() for p in non_risk_pred],
-                                [torch.zeros_like(p) for p in non_risk_pred]):
-                            pred_cls = self.index_to_class[
-                                type_pred.argmax().item()]
-                            nc = compute_nonconformity(
-                                obj_pred, obj_gt, method=self.nc_method)
-                            for t in range(8):
-                                nc_t = pd.Series([nc[t].item()], dtype=float)
-                                self.class_cps[pred_cls].update(
-                                    ground_truth=nc_t,
-                                    forecast=pd.Series([0], dtype=float),
-                                    horizon=t + 1)
+                    if update_conformal and len(non_risk_pred) > 0:
+                        self._update_conformal(
+                            non_risk_pred_type,
+                            non_risk_pred,
+                            [torch.zeros_like(p) for p in non_risk_pred])
 
                 # HTSC loss (same as original)
                 loss_htsc_i = htsc_loss(
@@ -282,14 +262,31 @@ class CausalForce(pl.LightningModule):
             flush=True,
         )
 
+        print("SAOCP radii after fixed-model validation calibration:", flush=True)
+        for risk_class, cp in self.class_cps.items():
+            q = [cp.predict(horizon=t + 1)[1] for t in range(8)]
+            print(f"  {risk_class}: " + " ".join(
+                f"{value:.6f}" for value in q), flush=True)
+
     def forward(self, batch):
         pass
 
     def training_step(self, batch, batch_idx):
-        return self._compute_step_losses(batch, prefix="")
+        return self._compute_step_losses(
+            batch, prefix="", update_conformal=False)
+
+    def on_validation_epoch_start(self):
+        if getattr(self.trainer, "world_size", 1) != 1:
+            raise RuntimeError(
+                "SAOCP calibration state is not synchronized across DDP ranks. "
+                "Run Stage-2 validation/checkpointing with one process.")
+        # Discard stale radii from earlier epochs. This epoch is a fresh,
+        # sequential calibration pass with the current frozen model weights.
+        self.class_cps = self._new_class_cps()
 
     def validation_step(self, batch, batch_idx):
-        self._compute_step_losses(batch, prefix="val_")
+        self._compute_step_losses(
+            batch, prefix="val_", update_conformal=True)
 
     def configure_optimizers(self):
         trainable = filter(lambda p: p.requires_grad, self.parameters())
@@ -323,6 +320,8 @@ if __name__ == "__main__":
     parser.add_argument('--w_ortho', type=float, default=0.1)
     parser.add_argument('--w_cf', type=float, default=0.5)
     parser.add_argument('--ortho_ramp_epochs', type=int, default=4)
+    parser.add_argument('--coverage', type=float, default=0.9,
+                        help='Target SAOCP coverage used during validation calibration.')
 
     parser.add_argument('--train_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/train/'), help='Path to train data')
     parser.add_argument('--val_data', type=str, default=os.path.expanduser('~/data/MCR_Dataset/Risk-Datasets-Venue/val/'), help='Path to val data')
@@ -353,6 +352,7 @@ if __name__ == "__main__":
         w_ortho=args.w_ortho,
         w_cf=args.w_cf,
         ortho_ramp_epochs=args.ortho_ramp_epochs,
+        coverage=args.coverage,
     )
 
     # ── Load pre-trained classifier weights ──
