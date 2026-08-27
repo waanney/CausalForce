@@ -50,7 +50,15 @@ def run_evaluation(args):
             label_risk_ids = batch['risk_id']
             label_risk_type = batch['label_risk_type']
             
-            outputs = model(front_imgs, all_objs_bbs)
+            # Ensure bounding box tensors are on CUDA device
+            all_objs_bbs_cuda = []
+            for b in range(len(all_objs_bbs)):
+                sample_bbs = []
+                for t in range(len(all_objs_bbs[b])):
+                    sample_bbs.append(all_objs_bbs[b][t].cuda())
+                all_objs_bbs_cuda.append(sample_bbs)
+
+            outputs = model(front_imgs, all_objs_bbs_cuda, device='cuda')
 
             B = front_imgs.shape[0]
             for i in range(B):
@@ -74,11 +82,10 @@ def run_evaluation(args):
                     continue
 
                 preds = torch.stack(matched_pred) # (P, 4)
-                gts   = torch.stack(matched_gt)  # (P, 4) if tensor else convert
-                if not isinstance(gts, torch.Tensor):
-                    gts = torch.tensor(gts, device=preds.device)
+                if not isinstance(matched_gt[0], torch.Tensor):
+                    gts = torch.tensor(matched_gt, device=preds.device)
                 else:
-                    gts = gts.to(preds.device)
+                    gts = torch.stack(matched_gt).to(preds.device)
 
                 accuracy = (preds.argmax(dim=1) == gts).float().mean().item()
                 cls_accuracy += accuracy
