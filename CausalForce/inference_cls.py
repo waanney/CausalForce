@@ -31,7 +31,6 @@ class InferenceModule(pl.LightningModule):
 
         outputs = self.model(front_imgs, all_objs_bbs)
 
-
         for i in range(B):
             pred_risk_type = outputs["risk_type"][i]        # (num_preds, 4)
             gt_risk_ids        = label_risk_ids[i]             # list[int]
@@ -53,7 +52,10 @@ class InferenceModule(pl.LightningModule):
                         matched_pred.append(pred_risk_type[j])         
                         idx = gt_risk_ids.index(obj_id)
                         matched_gt.append(gt_risk_types[idx])           
-                        
+                
+                if len(matched_pred) == 0:
+                    continue
+
                 preds = torch.stack(matched_pred) # (P, 4)                   
                 gts   = torch.stack(matched_gt)  # (P, 4)   
                 
@@ -73,15 +75,15 @@ class InferenceModule(pl.LightningModule):
                     elif rt == 3:
                         self.risk_type_cnt['C'] += 1
 
-
-                        
-    
     @torch.no_grad()
     def test_epoch_end(self, outputs):
-        print(f"Average classification accuracy: {self.cls_accuracy / self.risk_sample_cnt:.4f}")
+        acc = self.cls_accuracy / self.risk_sample_cnt if self.risk_sample_cnt > 0 else 0.0
+        print(f"\n=======================================================")
+        print(f"Average classification accuracy: {acc:.4f}")
         print("Risk type counts:")
         for risk_type, count in self.risk_type_cnt.items():
-            print(f"{risk_type}: {count}")
+            print(f"  {risk_type}: {count}")
+        print(f"=======================================================\n")
 
     def configure_optimizers(self):
         return None
@@ -89,20 +91,19 @@ class InferenceModule(pl.LightningModule):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, default='/path/to/your/testing_data/')
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--checkpoint", type=str, default='/path/to/your/checkpoint.ckpt')
     args = parser.parse_args()
 
-    
     test_set = MultipleRisksDataset(data_root=args.data_root)
-    print(len(test_set))
-    test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=8, collate_fn=custom_collate_fn)
-    
+    print(f"Test dataset length: {len(test_set)}")
+    test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=custom_collate_fn)
 
     model = GCN_model()
 
-    checkpoint = torch.load(args.checkpoint)
+    checkpoint = torch.load(args.checkpoint, map_location='cuda' if torch.cuda.is_available() else 'cpu')
     state_dict = checkpoint["state_dict"]
     new_state_dict = {}
     for key, value in state_dict.items():
@@ -115,5 +116,5 @@ if __name__ == "__main__":
 
     inference_module = InferenceModule(model=model)
 
-    trainer = pl.Trainer(gpus=args.gpus)
+    trainer = pl.Trainer(accelerator='gpu', devices=args.gpus)
     trainer.test(inference_module, test_dataloaders=test_loader)
