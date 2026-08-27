@@ -31,7 +31,12 @@ echo "============================================"
 export PYTHONUSERBASE=$HOME/.container_packages
 export PATH=$PYTHONUSERBASE/bin:$PATH
 export PYTHONPATH=$PYTHONUSERBASE/lib/python3.8/site-packages:$PYTHONPATH
-mkdir -p $PYTHONUSERBASE
+mkdir -p $PYTHONUSERBASE/lib/python3.8/site-packages
+
+# Clean up any leftover files from previous plotly versions
+rm -rf $PYTHONUSERBASE/lib/python3.8/site-packages/plotly*
+rm -rf $PYTHONUSERBASE/lib/python3.8/site-packages/_plotly_utils*
+rm -rf $PYTHONUSERBASE/lib/python3.8/site-packages/narwhals*
 
 # ─── Install extra packages offline ───
 pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
