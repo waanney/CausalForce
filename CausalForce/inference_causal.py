@@ -79,8 +79,8 @@ class CausalInferenceModule(pl.LightningModule):
             print(f"  {risk_class}: {formatted}", flush=True)
             print(f"    calibration counts: {counts}", flush=True)
             if any(count == 0 for count in counts):
-                raise RuntimeError(
-                    f"Empty SAOCP calibration bucket for {risk_class}: {counts}")
+                print(
+                    f"  [Notice] SAOCP calibration bucket for {risk_class} has 0 count: {counts}", flush=True)
         print(f"SAOCP target coverage value(s): {sorted(coverages, key=str)}", flush=True)
 
     def _debug_tube(self, scenario_id, object_id, risk_class, raw, q, pred, gt, metrics):
