@@ -236,4 +236,4 @@ if __name__ == "__main__":
     inference_module = CausalInferenceModule(
         model=model, cp_ckpt=checkpoint, debug_samples=args.debug_samples)
     trainer = pl.Trainer(gpus=args.gpus)
-    trainer.test(inference_module, test_dataloaders=test_loader)
+    trainer.test(inference_module, dataloaders=test_loader)
