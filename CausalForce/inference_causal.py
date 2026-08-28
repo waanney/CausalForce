@@ -55,6 +55,15 @@ class CausalInferenceModule(pl.LightningModule):
             self.class_cps[risk_class].predict(horizon=t + 1)[1]
             for t in range(8)
         ], dtype=float)
+        # Fallback for uncalibrated classes (e.g. OBS with 0 calibration count)
+        if values.sum() == 0:
+            calibrated_vals = []
+            for k, cp in self.class_cps.items():
+                v = np.asarray([cp.predict(horizon=t + 1)[1] for t in range(8)], dtype=float)
+                if v.sum() > 0:
+                    calibrated_vals.append(v)
+            if calibrated_vals:
+                values = np.mean(calibrated_vals, axis=0)
         if values.shape != (8,) or not np.isfinite(values).all():
             raise ValueError(
                 f"Invalid SAOCP radii for {risk_class}: {values.tolist()}")
