@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=Eval_Paper_Metrics
-#SBATCH --output=log/slurm/eval_paper_%j.out
-#SBATCH --error=log/slurm/eval_paper_%j.err
+#SBATCH --job-name=Calib_Eval_Causal
+#SBATCH --output=log/slurm/calib_eval_%j.out
+#SBATCH --error=log/slurm/calib_eval_%j.err
 #SBATCH --partition=convergence
 #SBATCH --qos=short
 #SBATCH --nodes=1
@@ -9,13 +9,13 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gpus=a100_7g.80gb:1
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --container-image nvcr.io\#nvidia/pytorch:22.08-py3
 #SBATCH --container-mount-home
 
 # ═══════════════════════════════════════════════════════
-# Paper Metrics Evaluation: Coverage, TV, TC, BA, Risk-IoU
+# CausalForce SAOCP Calibration + Paper Metrics Evaluation
 # Cluster: Convergence (LIP6) — Container mode
 # ═══════════════════════════════════════════════════════
 
@@ -57,25 +57,37 @@ pip install --no-index --find-links=$HOME/pip_wheels --user --no-deps \
             --quiet
 
 # ─── Paths ───
+TRAIN_DATA="${TRAIN_DATA:-$HOME/data/MCR_Dataset/Risk-Datasets-Venue/train/}"
 TEST_DATA="${TEST_DATA:-$HOME/data/MCR_Dataset/Risk-Datasets-Venue/test/}"
-# This must be a calibrated Stage-2 checkpoint. A Stage-1 classifier has no
-# trained risk-score head and therefore cannot produce Risk Tube metrics.
-CKPT="${CAUSAL_CKPT:-$HOME/CausalForce/log/CausalForce_v1/epoch=14-calibrated.ckpt}"
+INPUT_CKPT="${CAUSAL_CKPT:-$HOME/CausalForce/log/CausalForce_v1/epoch=14-last.ckpt}"
+CALIB_CKPT="$HOME/CausalForce/log/CausalForce_v1/epoch=14-calibrated.ckpt"
+COVERAGE="${COVERAGE:-0.9}"
 
-if [[ ! -f "${CKPT}" ]]; then
-    echo "ERROR: Stage-2 checkpoint not found: ${CKPT}" >&2
-    echo "Set CAUSAL_CKPT=/absolute/path/to/stage2.ckpt" >&2
+if [[ ! -f "${INPUT_CKPT}" ]]; then
+    echo "ERROR: Input checkpoint not found: ${INPUT_CKPT}" >&2
     exit 2
 fi
 
-# ─── Run ───
 cd $HOME/CausalForce/CausalForce
 
+# ─── Step 1: Calibrate SAOCP on training/calibration stream ───
+echo "[Step 1/2] Calibrating SAOCP conformal prediction on ${TRAIN_DATA}..."
+python calibrate_saocp.py \
+    --data_root "${TRAIN_DATA}" \
+    --checkpoint "${INPUT_CKPT}" \
+    --output_ckpt "${CALIB_CKPT}" \
+    --batch_size 16 \
+    --num_workers 8 \
+    --gpus 1 \
+    --coverage "${COVERAGE}"
+
+# ─── Step 2: Evaluate on held-out test split ───
+echo "[Step 2/2] Evaluating Paper Metrics on ${TEST_DATA} with calibrated checkpoint..."
 python inference_causal.py \
     --data_root "${TEST_DATA}" \
     --batch_size 16 \
-    --num_workers 4 \
     --gpus 1 \
-    --checkpoint "${CKPT}"
+    --num_workers 8 \
+    --checkpoint "${CALIB_CKPT}"
 
 echo "Finished at: $(date)"
